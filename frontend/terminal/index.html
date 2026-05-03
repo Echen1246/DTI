@@ -15,9 +15,9 @@
       </div>
       <div class="top-metrics" aria-label="training and model status">
         <div><span>model</span><strong>YOLO11x-P2</strong></div>
-        <div><span>checkpoint</span><strong>epoch 8+</strong></div>
-        <div><span>mAP50</span><strong>0.48</strong></div>
-        <div><span>mode</span><strong>live demo</strong></div>
+        <div><span>checkpoint</span><strong>epoch 26</strong></div>
+        <div><span>mAP50</span><strong>0.58</strong></div>
+        <div><span>mode</span><strong>playback</strong></div>
       </div>
     </header>
 
@@ -26,7 +26,17 @@
         <span>Ground camera feed</span>
         <strong id="feedStatus">TRACKING</strong>
       </div>
-      <canvas id="cameraCanvas" width="1280" height="720"></canvas>
+      <div class="camera-stage">
+        <video
+          id="cameraVideo"
+          src="media/annotated_demo.mp4"
+          autoplay
+          muted
+          loop
+          playsinline
+        ></video>
+        <canvas id="cameraCanvas" width="1280" height="720"></canvas>
+      </div>
       <div class="feed-footer">
         <div>
           <span>camera</span>

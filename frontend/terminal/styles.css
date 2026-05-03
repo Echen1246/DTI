@@ -121,6 +121,26 @@ body {
   display: block;
 }
 
+.camera-stage {
+  position: relative;
+  min-height: 0;
+  background: #05080a;
+  overflow: hidden;
+}
+
+#cameraVideo {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+#cameraCanvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 .feed-footer {
   display: grid;
   grid-template-columns: 1.5fr 1fr 1fr;

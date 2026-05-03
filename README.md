@@ -149,9 +149,9 @@ open frontend/terminal/index.html
 
 The terminal shows the intended table layout:
 
-- Main camera feed with long-range airborne tracks and bounding boxes.
+- Main camera feed playing the prepared annotated demo video.
 - Camera-relative XYZ track space with blips and projected motion trails.
 - Response asset readiness with simple track-to-asset assignments.
 - Track table and operator event log.
 
-It currently runs from an in-browser simulated scene so the table demo works without field hardware. The center feed can later be swapped to a real annotated MP4 or live inference stream while preserving the same right-side track-space and asset panels.
+The page is self-contained for tabletop playback: `frontend/terminal/media/annotated_demo.mp4` is bundled beside the static HTML/CSS/JS. The center feed can later be swapped to a real annotated MP4 or live inference stream while preserving the same right-side track-space and asset panels.

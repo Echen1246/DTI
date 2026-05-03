@@ -1,5 +1,6 @@
 const cameraCanvas = document.getElementById("cameraCanvas");
 const cameraCtx = cameraCanvas.getContext("2d");
+const cameraVideo = document.getElementById("cameraVideo");
 const spaceCanvas = document.getElementById("spaceCanvas");
 const spaceCtx = spaceCanvas.getContext("2d");
 const trackRows = document.getElementById("trackRows");
@@ -135,6 +136,12 @@ function assignAssets() {
 function drawCamera() {
   const w = cameraCanvas.width;
   const h = cameraCanvas.height;
+  cameraCtx.clearRect(0, 0, w, h);
+  if (hasVideoFeed()) {
+    drawVideoOverlays(w, h);
+    return;
+  }
+
   const horizon = h * 0.64;
 
   const sky = cameraCtx.createLinearGradient(0, 0, 0, h);
@@ -156,6 +163,34 @@ function drawCamera() {
   }
 
   drawCameraOverlays(w, h);
+}
+
+function hasVideoFeed() {
+  return cameraVideo && cameraVideo.readyState >= 2;
+}
+
+function drawVideoOverlays(w, h) {
+  drawReticle(w, h);
+  cameraCtx.save();
+  cameraCtx.fillStyle = "rgba(8, 12, 15, 0.68)";
+  cameraCtx.fillRect(18, 18, 318, 114);
+  cameraCtx.fillStyle = "#edf4f7";
+  cameraCtx.font = `${Math.max(13, w / 86)}px ui-sans-serif, system-ui`;
+  cameraCtx.fillText("MODEL PLAYBACK FEED", 34, 48);
+  cameraCtx.fillStyle = "#9fb0ba";
+  cameraCtx.fillText("YOLO detections + local track overlay", 34, 76);
+  cameraCtx.fillStyle = "#4fe0a1";
+  cameraCtx.fillText("XYZ space and assets live at right", 34, 104);
+  cameraCtx.strokeStyle = "rgba(79, 224, 161, 0.38)";
+  cameraCtx.lineWidth = 1;
+  for (let i = 0; i < 5; i += 1) {
+    const y = 150 + ((frame * 1.8 + i * 120) % Math.max(1, h - 180));
+    cameraCtx.beginPath();
+    cameraCtx.moveTo(0, y);
+    cameraCtx.lineTo(w, y);
+    cameraCtx.stroke();
+  }
+  cameraCtx.restore();
 }
 
 function drawCloudBand(w, h) {
