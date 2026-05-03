@@ -194,6 +194,217 @@ def status() -> dict[str, list[str]]:
 
 
 @app.function(
+    image=train_image,
+    gpu="B200",
+    volumes={"/data": data_volume, "/runs": runs_volume},
+    timeout=45 * 60,
+)
+def build_validation_demo(
+    sequence_prefix: str = "anti_uav300__anti_uav__val__20190925_101846_1_4__visible",
+    run_name: str = "open-cuas-yolo11x-p2",
+    output_name: str = "real_validation_multi_target.mp4",
+    max_frames: int = 240,
+    extra_targets: int = 4,
+    conf: float = 0.18,
+    iou: float = 0.55,
+    imgsz: int = 1536,
+) -> str:
+    import math
+
+    import cv2
+    import numpy as np
+    from ultralytics import YOLO
+
+    data_volume.reload()
+    runs_volume.reload()
+
+    images_dir = Path("/data/datasets/open-cuas/images/val")
+    labels_dir = Path("/data/datasets/open-cuas/labels/val")
+    image_paths = sorted(images_dir.glob(f"{sequence_prefix}*.jpg"))
+    if not image_paths:
+        raise FileNotFoundError(f"No validation frames matched prefix {sequence_prefix!r}")
+    image_paths = image_paths[:max_frames]
+
+    weights = Path("/runs/yolo") / run_name / "weights" / "best.pt"
+    if not weights.exists():
+        raise FileNotFoundError(weights)
+    model = YOLO(str(weights))
+
+    first = cv2.imread(str(image_paths[0]))
+    if first is None:
+        raise RuntimeError(f"Could not read first frame: {image_paths[0]}")
+    height, width = first.shape[:2]
+
+    out_dir = Path("/runs/demos")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / output_name
+    writer = cv2.VideoWriter(
+        str(out_path),
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        24.0,
+        (width, height),
+    )
+    if not writer.isOpened():
+        raise RuntimeError(f"Could not create video writer: {out_path}")
+
+    for frame_idx, image_path in enumerate(image_paths):
+        frame = cv2.imread(str(image_path))
+        if frame is None:
+            continue
+        scenario_boxes = _read_yolo_boxes(labels_dir / f"{image_path.stem}.txt", width, height)
+        drone_patch = _extract_patch(frame, scenario_boxes)
+        scenario_boxes.extend(
+            _add_extra_targets(
+                frame=frame,
+                frame_idx=frame_idx,
+                count=extra_targets,
+                patch=drone_patch,
+            )
+        )
+
+        result = model.predict(frame, conf=conf, iou=iou, imgsz=imgsz, max_det=50, verbose=False)[0]
+        model_boxes = []
+        for box in result.boxes:
+            class_id = int(box.cls[0])
+            name = str(result.names.get(class_id, f"class_{class_id}"))
+            if name not in {"unknown_uav", "friendly_quad", "drone"} and class_id not in {0, 1}:
+                continue
+            x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
+            model_boxes.append((x1, y1, x2, y2, float(box.conf[0]), name))
+
+        _draw_demo_frame(
+            frame=frame,
+            frame_idx=frame_idx,
+            scenario_boxes=scenario_boxes,
+            model_boxes=model_boxes,
+            conf=conf,
+        )
+        writer.write(frame)
+
+    writer.release()
+    runs_volume.commit()
+    return str(out_path)
+
+
+def _read_yolo_boxes(label_path: Path, width: int, height: int) -> list[tuple[int, int, int, int]]:
+    boxes: list[tuple[int, int, int, int]] = []
+    if not label_path.exists():
+        return boxes
+    for line in label_path.read_text().splitlines():
+        parts = line.split()
+        if len(parts) < 5:
+            continue
+        _, xc, yc, bw, bh = parts[:5]
+        xc_f = float(xc) * width
+        yc_f = float(yc) * height
+        bw_f = float(bw) * width
+        bh_f = float(bh) * height
+        x1 = int(max(0, xc_f - bw_f / 2))
+        y1 = int(max(0, yc_f - bh_f / 2))
+        x2 = int(min(width - 1, xc_f + bw_f / 2))
+        y2 = int(min(height - 1, yc_f + bh_f / 2))
+        if x2 > x1 and y2 > y1:
+            boxes.append((x1, y1, x2, y2))
+    return boxes
+
+
+def _extract_patch(frame, boxes: list[tuple[int, int, int, int]]):
+    import cv2
+    import numpy as np
+
+    if boxes:
+        x1, y1, x2, y2 = max(boxes, key=lambda box: (box[2] - box[0]) * (box[3] - box[1]))
+        pad = 4
+        y1 = max(0, y1 - pad)
+        x1 = max(0, x1 - pad)
+        y2 = min(frame.shape[0], y2 + pad)
+        x2 = min(frame.shape[1], x2 + pad)
+        patch = frame[y1:y2, x1:x2].copy()
+        if patch.size:
+            return patch
+    patch = np.zeros((18, 34, 3), dtype=np.uint8)
+    cv2.line(patch, (2, 9), (32, 9), (35, 35, 35), 2)
+    cv2.line(patch, (17, 2), (17, 16), (35, 35, 35), 2)
+    cv2.circle(patch, (17, 9), 3, (20, 20, 20), -1)
+    return patch
+
+
+def _add_extra_targets(frame, frame_idx: int, count: int, patch) -> list[tuple[int, int, int, int]]:
+    import math
+
+    import cv2
+    import numpy as np
+
+    height, width = frame.shape[:2]
+    boxes: list[tuple[int, int, int, int]] = []
+    if count <= 0:
+        return boxes
+
+    gray = cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY)
+    _, mask = cv2.threshold(gray, 245, 255, cv2.THRESH_BINARY_INV)
+    if mask.mean() < 2:
+        mask = np.full(gray.shape, 210, dtype=np.uint8)
+
+    for idx in range(count):
+        scale = 0.55 + 0.12 * ((idx + frame_idx // 20) % 4)
+        target_w = max(10, int(patch.shape[1] * scale))
+        target_h = max(8, int(patch.shape[0] * scale))
+        sprite = cv2.resize(patch, (target_w, target_h), interpolation=cv2.INTER_AREA)
+        sprite_mask = cv2.resize(mask, (target_w, target_h), interpolation=cv2.INTER_AREA)
+
+        x = int(width * (0.18 + 0.13 * idx) + frame_idx * (1.1 + 0.25 * idx)) % max(1, width - target_w - 2)
+        y = int(height * (0.18 + 0.08 * (idx % 3)) + 18 * math.sin(frame_idx / 24 + idx))
+        y = max(5, min(height - target_h - 5, y))
+
+        roi = frame[y : y + target_h, x : x + target_w]
+        alpha = (sprite_mask.astype(float) / 255.0)[:, :, None] * 0.72
+        roi[:] = (roi.astype(float) * (1.0 - alpha) + sprite.astype(float) * alpha).astype(np.uint8)
+        boxes.append((x, y, x + target_w, y + target_h))
+    return boxes
+
+
+def _draw_demo_frame(
+    frame,
+    frame_idx: int,
+    scenario_boxes: list[tuple[int, int, int, int]],
+    model_boxes: list[tuple[int, int, int, int, float, str]],
+    conf: float,
+) -> None:
+    import cv2
+
+    for idx, (x1, y1, x2, y2) in enumerate(scenario_boxes, start=1):
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (70, 190, 255), 1)
+        cv2.putText(
+            frame,
+            f"scenario T{idx:02d}",
+            (x1, max(14, y1 - 4)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.42,
+            (70, 190, 255),
+            1,
+            cv2.LINE_AA,
+        )
+
+    for idx, (x1, y1, x2, y2, score, name) in enumerate(model_boxes, start=1):
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (70, 230, 140), 2)
+        cv2.putText(
+            frame,
+            f"model {idx:02d} {name} {score:.2f}",
+            (x1, max(18, y1 - 7)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.48,
+            (70, 230, 140),
+            2,
+            cv2.LINE_AA,
+        )
+
+    cv2.rectangle(frame, (18, 18), (430, 104), (10, 14, 18), -1)
+    cv2.putText(frame, "REAL VALIDATION FRAME + MULTI-TARGET STRESS TEST", (30, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (235, 240, 245), 2, cv2.LINE_AA)
+    cv2.putText(frame, f"model boxes: {len(model_boxes)} | scenario targets: {len(scenario_boxes)} | conf >= {conf:.2f}", (30, 78), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (170, 185, 195), 1, cv2.LINE_AA)
+    cv2.putText(frame, f"frame {frame_idx:04d}", (30, 96), cv2.FONT_HERSHEY_SIMPLEX, 0.44, (130, 220, 180), 1, cv2.LINE_AA)
+
+
+@app.function(
     image=data_image,
     volumes={"/data": data_volume},
     timeout=24 * 60 * 60,
@@ -652,6 +863,11 @@ def main(
     resume: bool = False,
     frame_stride: int = 10,
     max_sequences: int | None = None,
+    sequence_prefix: str = "anti_uav300__anti_uav__val__20190925_101846_1_4__visible",
+    output_name: str = "real_validation_multi_target.mp4",
+    max_frames: int = 240,
+    extra_targets: int = 4,
+    conf: float = 0.18,
 ) -> None:
     if action == "upload":
         if not local_path:
@@ -751,6 +967,20 @@ def main(
                 output_dir=remote_path or "datasets/open-cuas",
                 frame_stride=frame_stride,
                 max_sequences=max_sequences,
+            )
+        )
+        return
+
+    if action == "build_validation_demo":
+        print(
+            build_validation_demo.remote(
+                sequence_prefix=sequence_prefix,
+                run_name=run_name,
+                output_name=output_name,
+                max_frames=max_frames,
+                extra_targets=extra_targets,
+                conf=conf,
+                imgsz=imgsz,
             )
         )
         return
