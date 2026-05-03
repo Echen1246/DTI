@@ -9,10 +9,6 @@
 <body>
   <main class="terminal-shell">
     <section class="camera-panel" aria-label="main camera feed">
-      <div class="panel-title">
-        <span>Ground camera feed</span>
-        <strong id="feedStatus">TRACKING</strong>
-      </div>
       <div class="camera-stage">
         <video
           id="cameraVideo"
@@ -22,20 +18,6 @@
           playsinline
         ></video>
         <canvas id="cameraCanvas" width="1280" height="720"></canvas>
-      </div>
-      <div class="feed-footer">
-        <div>
-          <span>camera</span>
-          <strong>North Ridge Optical Node</strong>
-        </div>
-        <div>
-          <span>hfov</span>
-          <strong>62 deg</strong>
-        </div>
-        <div>
-          <span>frame</span>
-          <strong id="frameCounter">000000</strong>
-        </div>
       </div>
     </section>
 
@@ -77,6 +59,6 @@
   </main>
 
   <script src="media/m2-res_720p_terminal_red_telemetry.js"></script>
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

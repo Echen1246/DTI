@@ -6,7 +6,6 @@ const spaceCtx = spaceCanvas.getContext("2d");
 const trackRows = document.getElementById("trackRows");
 const assetList = document.getElementById("assetList");
 const eventLog = document.getElementById("eventLog");
-const frameCounter = document.getElementById("frameCounter");
 const telemetry = window.DTI_TELEMETRY || null;
 const trackHistory = new Map();
 const lockedAssignments = new Map();
@@ -87,7 +86,6 @@ function tick() {
   renderAssets();
   renderTrackRows();
   renderEvents();
-  frameCounter.textContent = String(frame).padStart(6, "0");
   frame += 1;
   requestAnimationFrame(tick);
 }

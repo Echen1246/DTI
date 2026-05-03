@@ -43,27 +43,8 @@ body {
   background: var(--panel);
 }
 
-.feed-footer span {
-  color: var(--muted);
-  font-size: 11px;
-  text-transform: uppercase;
-}
-
-.feed-footer div {
-  border-left: 1px solid rgba(148, 164, 173, 0.18);
-  padding-left: 10px;
-}
-
-.feed-footer strong {
-  display: block;
-  margin-top: 3px;
-  font-size: 13px;
-}
-
 .camera-panel {
   min-height: 0;
-  display: grid;
-  grid-template-rows: 38px minmax(0, 1fr) 42px;
   overflow: hidden;
 }
 
@@ -105,13 +86,6 @@ body {
   width: 100%;
   height: 100%;
   pointer-events: none;
-}
-
-.feed-footer {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr;
-  align-items: center;
-  border-top: 1px solid var(--line);
 }
 
 .right-rail {
