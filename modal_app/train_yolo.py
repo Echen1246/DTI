@@ -98,7 +98,7 @@ def train_yolo11x_p2(
     run_name: str = "open-cuas-yolo11x-p2",
     epochs: int = 200,
     imgsz: int = 1536,
-    batch: str = "-1",
+    batch: str = "64",
     workers: int = 16,
     patience: int = 50,
     resume: bool = False,
@@ -614,7 +614,7 @@ def main(
     run_name: str = "open-cuas-yolo11x-p2",
     epochs: int = 200,
     imgsz: int = 1536,
-    batch: str = "-1",
+    batch: str = "64",
     resume: bool = False,
     frame_stride: int = 10,
     max_sequences: int | None = None,
@@ -651,6 +651,18 @@ def main(
                 resume=resume,
             )
         )
+        return
+
+    if action == "train_spawn":
+        call = train_yolo11x_p2.spawn(
+            data_yaml=data_yaml,
+            run_name=run_name,
+            epochs=epochs,
+            imgsz=imgsz,
+            batch=batch,
+            resume=resume,
+        )
+        print(f"Spawned train_yolo11x_p2 call: {call.object_id}")
         return
 
     if action == "download_gdrive":

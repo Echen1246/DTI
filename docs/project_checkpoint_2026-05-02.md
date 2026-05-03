@@ -133,7 +133,7 @@ Key files:
 Dataset prep is complete. Launch training:
 
 ```bash
-modal run modal_app/train_yolo.py --action train --data-yaml /data/datasets/open-cuas/data.yaml --epochs 200 --imgsz 1536 --batch -1
+modal run -d modal_app/train_yolo.py --action train_spawn --data-yaml /data/datasets/open-cuas/data.yaml --epochs 200 --imgsz 1536 --batch 64
 ```
 
 Check prep result:
