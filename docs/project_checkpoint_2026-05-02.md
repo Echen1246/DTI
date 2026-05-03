@@ -56,7 +56,7 @@ Roboflow export details:
 - Native classes: `0`, `airplane`, `bird`, `drone`
 - DTI mapping: `0` and `drone` map to `unknown_uav`; `bird` and `airplane` are preserved.
 
-Latest full prep run:
+Interrupted full prep run:
 
 - App ID: `ap-SRcNI7wIGmvlMLAtAhJdAp`
 - State after connection loss: stopped
@@ -68,11 +68,29 @@ Known-good smoke run:
 - Included DUT, Anti-UAV visible frames with `max_sequences=3`, and Drone-vs-Bird.
 - Validation showed the merge worked, but Drone-vs-Bird had bad YOLO boxes before the fix.
 
-Current full prep run:
+Completed full prep run:
 
 - App ID: `ap-AnBaYb5ZUOXbSntgeAOMfX`
-- Intended output: `/data/datasets/open-cuas/data.yaml`
-- Intended sources: DUT Anti-UAV, Anti-UAV300, Drone-vs-Bird, Roboflow `drones-yolo11-a`
+- Output: `/data/datasets/open-cuas/data.yaml`
+- Sources: DUT Anti-UAV, Anti-UAV300, Drone-vs-Bird, Roboflow `drones-yolo11-a`
+- Validation: zero errors, zero bad boxes, zero missing label files.
+- Final split sizes:
+  - train: 51,510 images, 78,540 labels
+  - val: 12,174 images, 12,442 labels
+  - test: 12,094 images, 12,189 labels
+- Final class counts:
+  - `unknown_uav`: 94,172
+  - `bird`: 4,859
+  - `airplane`: 4,140
+  - `friendly_quad`: 0
+  - `helicopter`: 0
+
+Source summary:
+
+- DUT Anti-UAV: 10,000 images, 10,108 kept labels, 1 dropped invalid label.
+- Anti-UAV300: 28,047 sampled visible frames/labels from 318 sequences.
+- Drone-vs-Bird: 20,952 images, 46,888 kept labels, 961 dropped invalid labels.
+- Roboflow `drones-yolo11-a`: 16,779 images, 18,128 kept labels, 1,447 dropped invalid labels.
 
 ## Code Changes Made
 
@@ -81,8 +99,8 @@ Key files:
 - `modal_app/train_yolo.py`
   - Added Modal download helpers for Google Drive and generic URLs.
   - Added ZIP inspection and text-read helpers.
-- Added `prepare_open_cuas` action to extract, convert, merge, and validate datasets in Modal.
-- Added Roboflow secret-backed downloader and automatic Roboflow ZIP extraction in `prepare_open_cuas`.
+  - Added `prepare_open_cuas` action to extract, convert, merge, and validate datasets in Modal.
+  - Added Roboflow secret-backed downloader and automatic Roboflow ZIP extraction in `prepare_open_cuas`.
   - Uses `/tmp/open_cuas_prepare` for extraction/conversion staging to avoid slow volume traversal.
 
 - `src/cuav_data/detection_convert.py`
@@ -105,17 +123,17 @@ Key files:
 
 ## Current Blockers
 
-- The full `prepare_open_cuas` run needs to be restarted after the network drop.
-- The current full `prepare_open_cuas` run needs to finish and validate.
-- Current folder `/Users/eddie/Documents/natsec` is not a git repository.
-- GitHub target repo is `https://github.com/Echen1246/DTI.git`; we need to clone it or connect this workspace before creating a git commit checkpoint.
+- Current working scaffold is in `/Users/eddie/Documents/natsec`.
+- GitHub target repo was cloned into `/Users/eddie/Documents/natsec/DTI`.
+- Initial scaffold checkpoint was pushed to `main` as commit `bd44b98`.
+- Next blocker is launching and monitoring the first YOLO11x-P2 training job.
 
 ## Next Commands
 
-Restart full data prep:
+Dataset prep is complete. Launch training:
 
 ```bash
-modal run modal_app/train_yolo.py --action prepare_open_cuas --remote-path datasets/open-cuas --frame-stride 10
+modal run modal_app/train_yolo.py --action train --data-yaml /data/datasets/open-cuas/data.yaml --epochs 200 --imgsz 1536 --batch -1
 ```
 
 Check prep result:
