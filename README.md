@@ -24,10 +24,11 @@ Range estimation is handled geometrically from camera intrinsics, bbox pixel siz
 Canonical classes:
 
 ```yaml
-0: drone
-1: bird
-2: airplane
-3: helicopter
+0: friendly_quad
+1: unknown_uav
+2: bird
+3: airplane
+4: helicopter
 ```
 
 Source manifest: [configs/datasets/open_cuas_sources.yaml](/Users/eddie/Documents/natsec/configs/datasets/open_cuas_sources.yaml)
@@ -105,3 +106,35 @@ Training uses [configs/models/yolo11x-p2.yaml](/Users/eddie/Documents/natsec/con
 ## Current Scope
 
 This scaffold is intentionally focused on build order step 1. Local SAHI inference, ByteTrack visualization, range estimation, and Hungarian allocation come next once the first training job is underway.
+
+## Local Demo Platform
+
+The demo platform can be built before the final Modal checkpoint is ready. It writes:
+
+- `annotated_demo.mp4`: detection/tracking overlay video.
+- `telemetry.json`: track, confidence, range, bearing, and simulated map metadata.
+- `index.html`: self-contained dashboard for submission/screenshare.
+
+No-hardware smoke test:
+
+```bash
+PYTHONPATH=src python -m dti_demo.platform \
+  --synthetic \
+  --frames 420 \
+  --out demo_runs/synthetic
+```
+
+Real video once a checkpoint is downloaded:
+
+```bash
+PYTHONPATH=src python -m dti_demo.platform \
+  --weights weights/best.pt \
+  --source /path/to/validation_video.mp4 \
+  --out demo_runs/open-cuas-demo \
+  --camera-lat 38.8895 \
+  --camera-lon -77.0353 \
+  --heading-deg 35 \
+  --hfov-deg 62
+```
+
+The map panel is a visualization layer: it projects each track from camera pose, horizontal bearing, and class-size geometric range priors. It is meant for demo/operator context, not precise navigation.

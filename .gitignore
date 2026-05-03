@@ -5,6 +5,7 @@ __pycache__/
 .env
 .DS_Store
 runs/
+demo_runs/
 data/
 datasets/
 *.pt
