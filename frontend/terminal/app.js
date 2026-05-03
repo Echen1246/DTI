@@ -16,24 +16,28 @@ const camera = {
 };
 
 const assets = [
-  { name: "Asset A", type: "optical observer", status: "ready", track: null },
-  { name: "Asset B", type: "response drone", status: "ready", track: null },
-  { name: "Asset C", type: "response drone", status: "hold", track: null },
-  { name: "Asset D", type: "operator team", status: "offline", track: null },
+  { name: "Defender A", type: "quadrotor", status: "ready", x: -720, z: 760, track: null },
+  { name: "Defender B", type: "quadrotor", status: "ready", x: -220, z: 680, track: null },
+  { name: "Defender C", type: "quadrotor", status: "ready", x: 260, z: 700, track: null },
+  { name: "Defender D", type: "quadrotor", status: "ready", x: 720, z: 820, track: null },
+  { name: "Defender E", type: "standby", status: "hold", x: 0, z: 520, track: null },
+  { name: "Defender F", type: "maintenance", status: "offline", x: 1040, z: 640, track: null },
 ];
 
 const targets = [
-  makeTarget(1, "unknown_uav", -520, 180, 1750, 10.5, 0.15, -20),
-  makeTarget(2, "unknown_uav", 310, 240, 2250, -8.2, -0.2, -12),
-  makeTarget(3, "unknown_uav", 760, 150, 2850, -12.5, 0.1, -18),
-  makeTarget(4, "bird", -260, 120, 1150, 4.3, 0.35, 8),
-  makeTarget(5, "unknown_uav", 80, 320, 3150, 2.0, -0.3, -24),
+  makeTarget(1, "unknown_uav", -620, 180, 980, 8.5, 0.15, -9),
+  makeTarget(7, "unknown_uav", -250, 210, 1160, 6.2, -0.2, -11),
+  makeTarget(3, "unknown_uav", -40, 235, 870, 4.5, 0.1, -7),
+  makeTarget(6, "unknown_uav", 210, 195, 1320, -5.3, 0.05, -14),
+  makeTarget(8, "unknown_uav", 520, 150, 1580, -7.5, 0.12, -12),
+  makeTarget(4, "unknown_uav", 760, 125, 1810, -9.2, -0.08, -16),
 ];
 
 const events = [
   "Model checkpoint loaded from latest best.pt.",
   "Camera calibration profile active.",
   "Optical track-space initialized.",
+  "Assignment optimizer linked to active track IDs.",
 ];
 
 let frame = 0;
@@ -125,12 +129,11 @@ function updateTargets() {
 function assignAssets() {
   for (const asset of assets) asset.track = null;
   const readyAssets = assets.filter((asset) => asset.status !== "offline");
-  rankedTargets()
-    .filter((target) => target.className !== "bird")
-    .slice(0, readyAssets.length)
-    .forEach((target, index) => {
-      readyAssets[index].track = target.id;
-    });
+  const activeTargets = rankedTargets().filter((target) => target.className !== "bird");
+  const assignments = solveAssignment(readyAssets, activeTargets);
+  for (const assignment of assignments) {
+    readyAssets[assignment.assetIndex].track = activeTargets[assignment.targetIndex].id;
+  }
 }
 
 function drawCamera() {
@@ -170,27 +173,7 @@ function hasVideoFeed() {
 }
 
 function drawVideoOverlays(w, h) {
-  drawReticle(w, h);
-  cameraCtx.save();
-  cameraCtx.fillStyle = "rgba(8, 12, 15, 0.68)";
-  cameraCtx.fillRect(18, 18, 318, 114);
-  cameraCtx.fillStyle = "#edf4f7";
-  cameraCtx.font = `${Math.max(13, w / 86)}px ui-sans-serif, system-ui`;
-  cameraCtx.fillText("MODEL PLAYBACK FEED", 34, 48);
-  cameraCtx.fillStyle = "#9fb0ba";
-  cameraCtx.fillText("YOLO detections + local track overlay", 34, 76);
-  cameraCtx.fillStyle = "#4fe0a1";
-  cameraCtx.fillText("XYZ space and assets live at right", 34, 104);
-  cameraCtx.strokeStyle = "rgba(79, 224, 161, 0.38)";
-  cameraCtx.lineWidth = 1;
-  for (let i = 0; i < 5; i += 1) {
-    const y = 150 + ((frame * 1.8 + i * 120) % Math.max(1, h - 180));
-    cameraCtx.beginPath();
-    cameraCtx.moveTo(0, y);
-    cameraCtx.lineTo(w, y);
-    cameraCtx.stroke();
-  }
-  cameraCtx.restore();
+  cameraCtx.clearRect(0, 0, w, h);
 }
 
 function drawCloudBand(w, h) {
@@ -245,10 +228,11 @@ function projectCamera(target, w, h) {
 }
 
 function drawTarget(ctx, target, projection) {
-  const color = target.className === "bird" ? "#f1c66d" : "#4fe0a1";
+  const boxColor = target.className === "bird" ? "#f1c66d" : "#ff3b46";
+  const textColor = "#4fe0a1";
   ctx.save();
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
+  ctx.strokeStyle = boxColor;
+  ctx.fillStyle = textColor;
   ctx.lineWidth = 2;
 
   const boxW = projection.size * (target.className === "bird" ? 2.2 : 1.5);
@@ -371,7 +355,8 @@ function drawSpacePoint(target, origin) {
   spaceCtx.fill();
   spaceCtx.fillStyle = "#edf4f7";
   spaceCtx.font = `${Math.max(11, spaceCanvas.width / 48)}px ui-sans-serif, system-ui`;
-  spaceCtx.fillText(`T${pad(target.id)}`, p.x + 11, p.y - 6);
+  const assigned = assignedAssetForTarget(target.id);
+  spaceCtx.fillText(`T${pad(target.id)}${assigned ? ` -> ${assigned.name.split(" ").pop()}` : ""}`, p.x + 11, p.y - 6);
 }
 
 function projectSpace(point, origin) {
@@ -412,6 +397,7 @@ function renderTrackRows() {
           <span>${Math.round(target.z)} m</span>
           <span>${bearing.toFixed(1)} deg</span>
           <span class="priority">${target.priority}</span>
+          <span>${assignedAssetForTarget(target.id)?.name || "queued"}</span>
         </div>
       `;
     })
@@ -424,6 +410,52 @@ function renderEvents() {
 
 function rankedTargets() {
   return [...targets].sort((a, b) => b.priority - a.priority);
+}
+
+function assignedAssetForTarget(targetId) {
+  return assets.find((asset) => asset.track === targetId);
+}
+
+function solveAssignment(candidateAssets, candidateTargets) {
+  const count = Math.min(candidateAssets.length, candidateTargets.length);
+  if (count === 0) return [];
+
+  const assetsSubset = candidateAssets.slice(0, count);
+  const targetsSubset = candidateTargets.slice(0, count);
+  let best = null;
+
+  function search(assetIndex, usedTargets, current, cost) {
+    if (assetIndex === assetsSubset.length) {
+      if (!best || cost < best.cost) best = { cost, current: [...current] };
+      return;
+    }
+
+    for (let targetIndex = 0; targetIndex < targetsSubset.length; targetIndex += 1) {
+      if (usedTargets.has(targetIndex)) continue;
+      usedTargets.add(targetIndex);
+      current.push({ assetIndex, targetIndex });
+      search(
+        assetIndex + 1,
+        usedTargets,
+        current,
+        cost + assignmentCost(assetsSubset[assetIndex], targetsSubset[targetIndex]),
+      );
+      current.pop();
+      usedTargets.delete(targetIndex);
+    }
+  }
+
+  search(0, new Set(), [], 0);
+  return best?.current || [];
+}
+
+function assignmentCost(asset, target) {
+  const dx = target.x - asset.x;
+  const dz = target.z - asset.z;
+  const distanceCost = Math.hypot(dx, dz) / 2600;
+  const priorityBenefit = target.priority / 100;
+  const holdPenalty = asset.status === "hold" ? 0.24 : 0;
+  return distanceCost + holdPenalty - priorityBenefit * 0.38;
 }
 
 function bearingDeg(target) {

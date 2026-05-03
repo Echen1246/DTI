@@ -300,6 +300,7 @@ def annotate_video_demo(
     conf: float = 0.08,
     imgsz: int = 1536,
     iou: float = 0.55,
+    side_panel: bool = False,
 ) -> str:
     from dti_demo.platform import CameraPose, run_demo
 
@@ -322,6 +323,7 @@ def annotate_video_demo(
         conf=conf,
         imgsz=imgsz,
         iou=iou,
+        side_panel=side_panel,
         camera_pose=CameraPose(),
     )
     runs_volume.commit()
@@ -924,6 +926,7 @@ def main(
     iou: float = 0.55,
     draw_scenario: bool = False,
     fps: float = 10.0,
+    side_panel: bool = False,
 ) -> None:
     if action == "upload":
         if not local_path:
@@ -1052,6 +1055,7 @@ def main(
                 conf=conf,
                 imgsz=imgsz,
                 iou=iou,
+                side_panel=side_panel,
             )
         )
         return

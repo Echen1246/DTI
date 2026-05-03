@@ -163,8 +163,8 @@ body {
 
 .asset-list {
   display: grid;
-  gap: 8px;
-  padding: 12px;
+  gap: 7px;
+  padding: 10px;
 }
 
 .asset {
@@ -172,8 +172,8 @@ body {
   grid-template-columns: 12px 1fr auto;
   gap: 10px;
   align-items: center;
-  min-height: 50px;
-  padding: 10px;
+  min-height: 42px;
+  padding: 8px 10px;
   background: var(--panel-2);
   border: 1px solid var(--line-soft);
 }
@@ -224,7 +224,7 @@ body {
 .table-head,
 .track-row {
   display: grid;
-  grid-template-columns: 70px 1.4fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 64px 1.25fr 0.9fr 0.9fr 0.9fr 0.85fr 1.1fr;
   align-items: center;
   gap: 8px;
 }

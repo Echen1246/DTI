@@ -201,6 +201,7 @@ def run_demo(
     conf: float = 0.25,
     imgsz: int = 1280,
     iou: float = 0.55,
+    side_panel: bool = True,
     camera_pose: CameraPose | None = None,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -228,7 +229,7 @@ def run_demo(
         fps = float(capture.get(cv2.CAP_PROP_FPS)) or 30.0
         synthetic_detector = None
 
-    panel_w = 360
+    panel_w = 360 if side_panel else 0
     video_path = output_dir / "annotated_demo.mp4"
     writer = cv2.VideoWriter(
         str(video_path),
@@ -254,7 +255,7 @@ def run_demo(
 
         tracks = tracker.update(detections)
         _enrich_tracks(tracks, width, height, camera_pose)
-        annotated = _draw_dashboard_frame(frame, tracks, camera_pose)
+        annotated = _draw_dashboard_frame(frame, tracks, camera_pose, side_panel=side_panel)
         writer.write(annotated)
         if frame_idx % max(1, int(fps)) == 0:
             events.append(
@@ -284,6 +285,7 @@ def run_demo(
         "conf": conf,
         "imgsz": imgsz,
         "iou": iou,
+        "side_panel": side_panel,
     }
     (output_dir / "telemetry.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     (output_dir / "index.html").write_text(_render_html(summary), encoding="utf-8")
@@ -347,17 +349,23 @@ def _enrich_tracks(tracks: list[Track], width: int, height: int, camera_pose: Ca
         track.asset = assets[idx] if idx < len(assets) else "Operator queue"
 
 
-def _draw_dashboard_frame(frame: np.ndarray, tracks: list[Track], camera_pose: CameraPose) -> np.ndarray:
+def _draw_dashboard_frame(
+    frame: np.ndarray,
+    tracks: list[Track],
+    camera_pose: CameraPose,
+    side_panel: bool = True,
+) -> np.ndarray:
     height, width = frame.shape[:2]
-    panel_w = 360
+    panel_w = 360 if side_panel else 0
     annotated = np.zeros((height, width + panel_w, 3), dtype=np.uint8)
     annotated[:, :width] = frame
     for track in tracks:
         if track.misses:
             continue
         x1, y1, x2, y2 = [int(round(value)) for value in track.xyxy]
-        color = (42, 220, 160) if track.class_id == 1 else (90, 180, 255)
-        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+        box_color = (55, 70, 255) if track.class_id != 2 else (72, 196, 241)
+        text_color = (80, 235, 160)
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), box_color, 2)
         label = f"#{track.track_id:02d} {track.confidence:.2f}"
         cv2.putText(
             annotated,
@@ -365,7 +373,7 @@ def _draw_dashboard_frame(frame: np.ndarray, tracks: list[Track], camera_pose: C
             (x1, max(22, y1 - 8)),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.45,
-            color,
+            text_color,
             1,
             cv2.LINE_AA,
         )
@@ -378,6 +386,9 @@ def _draw_dashboard_frame(frame: np.ndarray, tracks: list[Track], camera_pose: C
     cv2.rectangle(annotated, (18, 18), (380, 102), (12, 18, 24), -1)
     _put(annotated, "DTI CAMERA FEED", 32, 48, scale=0.58, color=(235, 240, 245))
     _put(annotated, f"targets {len(active)} | avg range {avg_range:.0f}m", 32, 78, scale=0.48, color=(130, 220, 180))
+
+    if not side_panel:
+        return annotated
 
     cv2.rectangle(annotated, (width, 0), (width + panel_w, height), (18, 24, 30), -1)
     x = width + 18
@@ -635,6 +646,7 @@ def main() -> None:
     parser.add_argument("--conf", type=float, default=0.25)
     parser.add_argument("--imgsz", type=int, default=1280)
     parser.add_argument("--iou", type=float, default=0.55)
+    parser.add_argument("--no-side-panel", action="store_true", help="Write camera-only video without the right-side telemetry panel.")
     parser.add_argument("--camera-lat", type=float, default=CameraPose.lat)
     parser.add_argument("--camera-lon", type=float, default=CameraPose.lon)
     parser.add_argument("--heading-deg", type=float, default=CameraPose.heading_deg)
@@ -658,6 +670,7 @@ def main() -> None:
         conf=args.conf,
         imgsz=args.imgsz,
         iou=args.iou,
+        side_panel=not args.no_side_panel,
         camera_pose=pose,
     )
 
