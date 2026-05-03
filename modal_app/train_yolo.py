@@ -208,9 +208,9 @@ def build_validation_demo(
     conf: float = 0.18,
     iou: float = 0.55,
     imgsz: int = 1536,
+    draw_scenario: bool = False,
+    fps: float = 10.0,
 ) -> str:
-    import math
-
     import cv2
     import numpy as np
     from ultralytics import YOLO
@@ -241,7 +241,7 @@ def build_validation_demo(
     writer = cv2.VideoWriter(
         str(out_path),
         cv2.VideoWriter_fourcc(*"mp4v"),
-        24.0,
+        fps,
         (width, height),
     )
     if not writer.isOpened():
@@ -278,6 +278,7 @@ def build_validation_demo(
             scenario_boxes=scenario_boxes,
             model_boxes=model_boxes,
             conf=conf,
+            draw_scenario=draw_scenario,
         )
         writer.write(frame)
 
@@ -369,21 +370,23 @@ def _draw_demo_frame(
     scenario_boxes: list[tuple[int, int, int, int]],
     model_boxes: list[tuple[int, int, int, int, float, str]],
     conf: float,
+    draw_scenario: bool = False,
 ) -> None:
     import cv2
 
-    for idx, (x1, y1, x2, y2) in enumerate(scenario_boxes, start=1):
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (70, 190, 255), 1)
-        cv2.putText(
-            frame,
-            f"scenario T{idx:02d}",
-            (x1, max(14, y1 - 4)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.42,
-            (70, 190, 255),
-            1,
-            cv2.LINE_AA,
-        )
+    if draw_scenario:
+        for idx, (x1, y1, x2, y2) in enumerate(scenario_boxes, start=1):
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (70, 190, 255), 1)
+            cv2.putText(
+                frame,
+                f"scenario T{idx:02d}",
+                (x1, max(14, y1 - 4)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.42,
+                (70, 190, 255),
+                1,
+                cv2.LINE_AA,
+            )
 
     for idx, (x1, y1, x2, y2, score, name) in enumerate(model_boxes, start=1):
         cv2.rectangle(frame, (x1, y1), (x2, y2), (70, 230, 140), 2)
@@ -398,10 +401,19 @@ def _draw_demo_frame(
             cv2.LINE_AA,
         )
 
-    cv2.rectangle(frame, (18, 18), (430, 104), (10, 14, 18), -1)
-    cv2.putText(frame, "REAL VALIDATION FRAME + MULTI-TARGET STRESS TEST", (30, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (235, 240, 245), 2, cv2.LINE_AA)
-    cv2.putText(frame, f"model boxes: {len(model_boxes)} | scenario targets: {len(scenario_boxes)} | conf >= {conf:.2f}", (30, 78), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (170, 185, 195), 1, cv2.LINE_AA)
-    cv2.putText(frame, f"frame {frame_idx:04d}", (30, 96), cv2.FONT_HERSHEY_SIMPLEX, 0.44, (130, 220, 180), 1, cv2.LINE_AA)
+    rough_ranges = [_rough_range_from_box(x1, x2) for x1, _, x2, _, _, _ in model_boxes]
+    nearest = min(rough_ranges) if rough_ranges else None
+    average = sum(rough_ranges) / len(rough_ranges) if rough_ranges else None
+    cv2.rectangle(frame, (18, 18), (500, 126), (10, 14, 18), -1)
+    cv2.putText(frame, "DTI CAMERA FEED - MODEL DETECTIONS", (30, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (235, 240, 245), 2, cv2.LINE_AA)
+    cv2.putText(frame, f"targets: {len(model_boxes)} | threshold: {conf:.2f} | frame: {frame_idx:04d}", (30, 78), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (170, 185, 195), 1, cv2.LINE_AA)
+    range_text = "range: n/a" if average is None else f"avg range: {average:.0f}m | nearest: {nearest:.0f}m"
+    cv2.putText(frame, range_text, (30, 104), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (130, 220, 180), 1, cv2.LINE_AA)
+
+
+def _rough_range_from_box(x1: int, x2: int, focal_px: float = 1800.0, width_m: float = 0.6) -> float:
+    bbox_width = max(1, x2 - x1)
+    return focal_px * width_m / bbox_width
 
 
 @app.function(
@@ -868,6 +880,8 @@ def main(
     max_frames: int = 240,
     extra_targets: int = 4,
     conf: float = 0.18,
+    draw_scenario: bool = False,
+    fps: float = 10.0,
 ) -> None:
     if action == "upload":
         if not local_path:
@@ -981,6 +995,8 @@ def main(
                 extra_targets=extra_targets,
                 conf=conf,
                 imgsz=imgsz,
+                draw_scenario=draw_scenario,
+                fps=fps,
             )
         )
         return
