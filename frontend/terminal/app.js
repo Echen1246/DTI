@@ -23,7 +23,6 @@ const assets = [
   { name: "Defender C", status: "ready", x: 260, z: 700, track: null },
   { name: "Defender D", status: "ready", x: 720, z: 820, track: null },
   { name: "Defender E", status: "hold", x: 0, z: 520, track: null },
-  { name: "Defender F", status: "offline", x: 1040, z: 640, track: null },
 ];
 
 let targets = [
