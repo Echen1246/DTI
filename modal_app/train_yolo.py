@@ -287,6 +287,47 @@ def build_validation_demo(
     return str(out_path)
 
 
+@app.function(
+    image=train_image,
+    gpu="B200",
+    volumes={"/data": data_volume, "/runs": runs_volume},
+    timeout=45 * 60,
+)
+def annotate_video_demo(
+    remote_source: str,
+    run_name: str = "open-cuas-yolo11x-p2",
+    output_name: str = "m2-res_720p_annotated",
+    conf: float = 0.08,
+    imgsz: int = 1536,
+    iou: float = 0.55,
+) -> str:
+    from dti_demo.platform import CameraPose, run_demo
+
+    data_volume.reload()
+    runs_volume.reload()
+
+    source = Path("/data") / remote_source
+    if not source.exists():
+        raise FileNotFoundError(source)
+    weights = Path("/runs/yolo") / run_name / "weights" / "best.pt"
+    if not weights.exists():
+        raise FileNotFoundError(weights)
+
+    output_dir = Path("/runs/demos") / output_name
+    output_dir.mkdir(parents=True, exist_ok=True)
+    run_demo(
+        output_dir=output_dir,
+        weights=weights,
+        source=source,
+        conf=conf,
+        imgsz=imgsz,
+        iou=iou,
+        camera_pose=CameraPose(),
+    )
+    runs_volume.commit()
+    return str(output_dir)
+
+
 def _read_yolo_boxes(label_path: Path, width: int, height: int) -> list[tuple[int, int, int, int]]:
     boxes: list[tuple[int, int, int, int]] = []
     if not label_path.exists():
@@ -880,6 +921,7 @@ def main(
     max_frames: int = 240,
     extra_targets: int = 4,
     conf: float = 0.18,
+    iou: float = 0.55,
     draw_scenario: bool = False,
     fps: float = 10.0,
 ) -> None:
@@ -997,6 +1039,19 @@ def main(
                 imgsz=imgsz,
                 draw_scenario=draw_scenario,
                 fps=fps,
+            )
+        )
+        return
+
+    if action == "annotate_video_demo":
+        print(
+            annotate_video_demo.remote(
+                remote_source=remote_archive,
+                run_name=run_name,
+                output_name=output_name,
+                conf=conf,
+                imgsz=imgsz,
+                iou=iou,
             )
         )
         return

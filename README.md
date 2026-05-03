@@ -154,4 +154,4 @@ The terminal shows the intended table layout:
 - Response asset readiness with simple track-to-asset assignments.
 - Track table and operator event log.
 
-The page is self-contained for tabletop playback: `frontend/terminal/media/real_validation_multi_target_clean.mp4` is bundled beside the static HTML/CSS/JS. The center feed can later be swapped to another annotated MP4 or live inference stream while preserving the same right-side track-space and asset panels.
+The page is self-contained for tabletop playback: `frontend/terminal/media/m2-res_720p_annotated_clean.mp4` is bundled beside the static HTML/CSS/JS. The center feed can later be swapped to another annotated MP4 or live inference stream while preserving the same right-side track-space and asset panels.

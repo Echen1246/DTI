@@ -199,6 +199,8 @@ def run_demo(
     synthetic: bool = False,
     frames: int = 420,
     conf: float = 0.25,
+    imgsz: int = 1280,
+    iou: float = 0.55,
     camera_pose: CameraPose | None = None,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -226,12 +228,13 @@ def run_demo(
         fps = float(capture.get(cv2.CAP_PROP_FPS)) or 30.0
         synthetic_detector = None
 
+    panel_w = 360
     video_path = output_dir / "annotated_demo.mp4"
     writer = cv2.VideoWriter(
         str(video_path),
         cv2.VideoWriter_fourcc(*"mp4v"),
         fps,
-        (width, height),
+        (width + panel_w, height),
     )
     if not writer.isOpened():
         raise RuntimeError(f"Could not create output video: {video_path}")
@@ -247,7 +250,7 @@ def run_demo(
             ok, frame = capture.read()
             if not ok:
                 break
-            detections = _predict_frame(model, frame, conf=conf)
+            detections = _predict_frame(model, frame, conf=conf, imgsz=imgsz, iou=iou)
 
         tracks = tracker.update(detections)
         _enrich_tracks(tracks, width, height, camera_pose)
@@ -278,6 +281,9 @@ def run_demo(
         "mode": "synthetic" if synthetic_detector is not None else "model",
         "weights": str(weights) if weights else None,
         "source": str(source) if source else None,
+        "conf": conf,
+        "imgsz": imgsz,
+        "iou": iou,
     }
     (output_dir / "telemetry.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     (output_dir / "index.html").write_text(_render_html(summary), encoding="utf-8")
@@ -285,8 +291,8 @@ def run_demo(
     print(f"Wrote {output_dir / 'index.html'}")
 
 
-def _predict_frame(model, frame: np.ndarray, conf: float) -> list[Detection]:
-    results = model.predict(frame, conf=conf, verbose=False)
+def _predict_frame(model, frame: np.ndarray, conf: float, imgsz: int = 1280, iou: float = 0.55) -> list[Detection]:
+    results = model.predict(frame, conf=conf, imgsz=imgsz, iou=iou, max_det=100, verbose=False)
     detections: list[Detection] = []
     if not results:
         return detections
@@ -342,33 +348,39 @@ def _enrich_tracks(tracks: list[Track], width: int, height: int, camera_pose: Ca
 
 
 def _draw_dashboard_frame(frame: np.ndarray, tracks: list[Track], camera_pose: CameraPose) -> np.ndarray:
-    annotated = frame.copy()
-    height, width = annotated.shape[:2]
+    height, width = frame.shape[:2]
+    panel_w = 360
+    annotated = np.zeros((height, width + panel_w, 3), dtype=np.uint8)
+    annotated[:, :width] = frame
     for track in tracks:
         if track.misses:
             continue
         x1, y1, x2, y2 = [int(round(value)) for value in track.xyxy]
         color = (42, 220, 160) if track.class_id == 1 else (90, 180, 255)
         cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-        label = f"ID {track.track_id} {track.class_name} {track.confidence:.2f}"
-        if track.range_m:
-            label += f" ~{track.range_m:.0f}m"
+        label = f"#{track.track_id:02d} {track.confidence:.2f}"
         cv2.putText(
             annotated,
             label,
             (x1, max(22, y1 - 8)),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
+            0.45,
             color,
-            2,
+            1,
             cv2.LINE_AA,
         )
 
-    panel_w = 360
-    overlay = annotated.copy()
-    cv2.rectangle(overlay, (width - panel_w, 0), (width, height), (18, 24, 30), -1)
-    annotated = cv2.addWeighted(overlay, 0.72, annotated, 0.28, 0)
-    x = width - panel_w + 18
+    active = sorted([track for track in tracks if track.misses == 0], key=lambda item: item.priority, reverse=True)
+    avg_range = sum(track.range_m for track in active if track.range_m is not None) / max(
+        1,
+        len([track for track in active if track.range_m is not None]),
+    )
+    cv2.rectangle(annotated, (18, 18), (380, 102), (12, 18, 24), -1)
+    _put(annotated, "DTI CAMERA FEED", 32, 48, scale=0.58, color=(235, 240, 245))
+    _put(annotated, f"targets {len(active)} | avg range {avg_range:.0f}m", 32, 78, scale=0.48, color=(130, 220, 180))
+
+    cv2.rectangle(annotated, (width, 0), (width + panel_w, height), (18, 24, 30), -1)
+    x = width + 18
     y = 34
     _put(annotated, "DTI OPTICAL TRACKING DEMO", x, y, scale=0.58, color=(235, 240, 245))
     y += 28
@@ -378,7 +390,6 @@ def _draw_dashboard_frame(frame: np.ndarray, tracks: list[Track], camera_pose: C
     y += 22
     _put(annotated, f"Heading {camera_pose.heading_deg:.0f} deg | HFOV {camera_pose.hfov_deg:.0f} deg", x, y)
     y += 34
-    active = sorted([track for track in tracks if track.misses == 0], key=lambda item: item.priority, reverse=True)
     for track in active[:8]:
         range_text = "range n/a" if track.range_m is None else f"{track.range_m:.0f}m"
         bearing_text = "brg n/a" if track.bearing_deg is None else f"{track.bearing_deg:.0f} deg"
@@ -622,6 +633,8 @@ def main() -> None:
     parser.add_argument("--synthetic", action="store_true", help="Generate a no-hardware synthetic sky demo.")
     parser.add_argument("--frames", type=int, default=420)
     parser.add_argument("--conf", type=float, default=0.25)
+    parser.add_argument("--imgsz", type=int, default=1280)
+    parser.add_argument("--iou", type=float, default=0.55)
     parser.add_argument("--camera-lat", type=float, default=CameraPose.lat)
     parser.add_argument("--camera-lon", type=float, default=CameraPose.lon)
     parser.add_argument("--heading-deg", type=float, default=CameraPose.heading_deg)
@@ -643,6 +656,8 @@ def main() -> None:
         synthetic=args.synthetic,
         frames=args.frames,
         conf=args.conf,
+        imgsz=args.imgsz,
+        iou=args.iou,
         camera_pose=pose,
     )
 
