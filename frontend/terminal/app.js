@@ -1,8 +1,6 @@
 const cameraCanvas = document.getElementById("cameraCanvas");
 const cameraCtx = cameraCanvas.getContext("2d");
 const cameraVideo = document.getElementById("cameraVideo");
-const spaceCanvas = document.getElementById("spaceCanvas");
-const spaceCtx = spaceCanvas.getContext("2d");
 const trackRows = document.getElementById("trackRows");
 const assetList = document.getElementById("assetList");
 const eventLog = document.getElementById("eventLog");
@@ -38,7 +36,6 @@ let targets = [
 const events = [
   "Model checkpoint loaded from latest best.pt.",
   "Camera calibration profile active.",
-  "Optical track-space initialized.",
   "Assignment optimizer linked to active track IDs.",
 ];
 
@@ -63,7 +60,6 @@ function makeTarget(id, className, x, y, z, vx, vy, vz) {
 
 function resizeCanvases() {
   resizeCanvasToDisplay(cameraCanvas);
-  resizeCanvasToDisplay(spaceCanvas);
 }
 
 function resizeCanvasToDisplay(canvas) {
@@ -82,7 +78,6 @@ function tick() {
   updateTargets();
   assignAssets();
   drawCamera();
-  drawTrackSpace();
   renderAssets();
   renderTrackRows();
   renderEvents();
@@ -449,102 +444,6 @@ function drawCameraOverlays(w, h) {
   cameraCtx.fillText(`${rankedTargets().length} active tracks`, 34, 102);
 }
 
-function drawTrackSpace() {
-  const w = spaceCanvas.width;
-  const h = spaceCanvas.height;
-  spaceCtx.clearRect(0, 0, w, h);
-  spaceCtx.fillStyle = "#0e1419";
-  spaceCtx.fillRect(0, 0, w, h);
-
-  const origin = { x: w * 0.5, y: h * 0.86 };
-  const trackSpaceScale = computeTrackSpaceScale(w, h);
-  drawAxes(origin, w, h, trackSpaceScale);
-  drawStatePoints(origin, trackSpaceScale);
-}
-
-function drawAxes(origin, w, h, trackSpaceScale) {
-  const farY = origin.y - trackSpaceScale.zLen;
-  const nearY = origin.y - h * 0.08;
-  const nearHalfWidth = w * 0.07;
-  const farHalfWidth = trackSpaceScale.xLen;
-
-  spaceCtx.lineWidth = 1;
-  spaceCtx.strokeStyle = "rgba(148, 164, 173, 0.22)";
-  line(origin.x, origin.y, origin.x - farHalfWidth, farY);
-  line(origin.x, origin.y, origin.x + farHalfWidth, farY);
-  line(origin.x - nearHalfWidth, nearY, origin.x + nearHalfWidth, nearY);
-  line(origin.x - farHalfWidth, farY, origin.x + farHalfWidth, farY);
-
-  spaceCtx.lineWidth = 2;
-  spaceCtx.strokeStyle = "#f1c66d";
-  line(origin.x, origin.y, origin.x, farY);
-  spaceCtx.strokeStyle = "#73b7ff";
-  line(origin.x - farHalfWidth, farY, origin.x + farHalfWidth, farY);
-  spaceCtx.strokeStyle = "#4fe0a1";
-  line(origin.x + farHalfWidth + w * 0.05, farY + trackSpaceScale.yLen, origin.x + farHalfWidth + w * 0.05, farY - trackSpaceScale.yLen);
-
-  spaceCtx.fillStyle = "#9fb0ba";
-  spaceCtx.font = `${Math.max(12, w / 42)}px ui-sans-serif, system-ui`;
-  spaceCtx.fillText("X", origin.x + farHalfWidth + 8, farY + 4);
-  spaceCtx.fillText("Y", origin.x + farHalfWidth + w * 0.05 + 8, farY - trackSpaceScale.yLen - 4);
-  spaceCtx.fillText("Z", origin.x + 8, farY - 8);
-}
-
-function drawStatePoints(origin, trackSpaceScale) {
-  for (const target of rankedTargets().filter((item) => item.className !== "bird")) {
-    const point = projectStatePoint(target, origin, trackSpaceScale);
-    const assigned = assignedAssetForTarget(target.id);
-    const rangeSigma = target.uncertainty?.range_sigma || 20;
-    const radius = clamp(3 + target.quality * 6, 4, 9);
-    const uncertaintyRadius = clamp(rangeSigma / trackSpaceScale.maxZ * trackSpaceScale.zLen, 10, 42);
-
-    spaceCtx.strokeStyle = "rgba(79, 224, 161, 0.18)";
-    spaceCtx.lineWidth = 1;
-    spaceCtx.beginPath();
-    spaceCtx.arc(point.x, point.y, uncertaintyRadius, 0, Math.PI * 2);
-    spaceCtx.stroke();
-
-    spaceCtx.fillStyle = "#4fe0a1";
-    spaceCtx.beginPath();
-    spaceCtx.arc(point.x, point.y, radius, 0, Math.PI * 2);
-    spaceCtx.fill();
-
-    spaceCtx.fillStyle = "#edf3f6";
-    spaceCtx.font = `${Math.max(11, spaceCanvas.width / 52)}px ui-sans-serif, system-ui`;
-    spaceCtx.fillText(`T${pad(target.id)}${assigned ? `:${assigned.name.split(" ").pop()}` : ""}`, point.x + 11, point.y - 6);
-  }
-}
-
-function projectStatePoint(target, origin, trackSpaceScale) {
-  const xNorm = clamp(target.x / trackSpaceScale.maxAbsX, -1, 1);
-  const zNorm = clamp((target.z - trackSpaceScale.minZ) / Math.max(1, trackSpaceScale.maxZ - trackSpaceScale.minZ), 0, 1);
-  const yNorm = clamp(target.y / trackSpaceScale.maxAbsY, -1, 1);
-  const lateralSpread = trackSpaceScale.xLen * (0.22 + 0.78 * zNorm);
-  return {
-    x: origin.x + xNorm * lateralSpread,
-    y: origin.y - zNorm * trackSpaceScale.zLen - yNorm * trackSpaceScale.yLen,
-  };
-}
-
-function computeTrackSpaceScale(w, h) {
-  const states = (telemetry?.track_state_frames || []).flatMap((frameState) => frameState.states || []);
-  const xyzValues = states.map((state) => state.xyz_m).filter(Array.isArray);
-  const xValues = xyzValues.map((xyz) => Math.abs(Number(xyz[0]) || 0));
-  const yValues = xyzValues.map((xyz) => Math.abs(Number(xyz[1]) || 0));
-  const zValues = xyzValues.map((xyz) => Number(xyz[2]) || 0).filter((value) => value > 0);
-  const minZ = Math.max(0, Math.min(...zValues, 40) - 10);
-  const maxZ = Math.max(...zValues, 160) + 10;
-  return {
-    minZ,
-    maxZ,
-    maxAbsX: Math.max(20, Math.max(...xValues, 20) * 1.35),
-    maxAbsY: Math.max(18, Math.max(...yValues, 18) * 1.7),
-    xLen: w * 0.38,
-    zLen: h * 0.62,
-    yLen: h * 0.17,
-  };
-}
-
 function renderAssets() {
   assetList.innerHTML = assets
     .map((asset) => {
@@ -644,13 +543,6 @@ function bearingDeg(target) {
 
 function cameraHeadingDeg() {
   return Number(telemetry?.camera?.heading_deg) || 35;
-}
-
-function line(x1, y1, x2, y2) {
-  spaceCtx.beginPath();
-  spaceCtx.moveTo(x1, y1);
-  spaceCtx.lineTo(x2, y2);
-  spaceCtx.stroke();
 }
 
 function pad(value) {
