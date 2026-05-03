@@ -121,17 +121,19 @@ Key files:
 - `src/cuav_data/validate_yolo.py`
   - Validates image/label presence, class IDs, boxes, and class counts.
 
-## Current Blockers
+## Current Training State
 
 - Current working scaffold is in `/Users/eddie/Documents/natsec`.
 - GitHub target repo was cloned into `/Users/eddie/Documents/natsec/DTI`.
 - Initial scaffold checkpoint was pushed to `main` as commit `bd44b98`.
-- First YOLO11x-P2 training job was spawned after fixing multi-GPU batch sizing.
-- Training app: `ap-xcc3QtepwhjtNyvTFjgUkU`
-- Training function call: `fc-01KQPD527KTBQNZ0ZDGNJCDN7W`
-- Training config: `epochs=200`, `imgsz=1536`, `batch=64`, `device=0,1,2,3,4,5,6,7`
+- YOLO11x-P2 training config: `epochs=200`, `imgsz=1536`, `batch=64`, `device=0,1,2,3,4,5,6,7`.
 - Earlier failed launch `ap-hwdZ1pcmme2MDgMdnvkYF1` died before epoch 1 because Ultralytics does not support `batch=-1` AutoBatch in multi-GPU training.
-- Training call `fc-01KQPD527KTBQNZ0ZDGNJCDN7W` also failed before epoch 1 because DDP ranks raced to download/read `yolo11x.pt`, corrupting the partial checkpoint read. Fix: download `yolo11x.pt` once before DDP and pass its absolute path as `pretrained=...`.
+- Training app `ap-xcc3QtepwhjtNyvTFjgUkU`, function call `fc-01KQPD527KTBQNZ0ZDGNJCDN7W`, also failed before epoch 1 because DDP ranks raced to download/read `yolo11x.pt`, corrupting the partial checkpoint read.
+- Fix committed: download `yolo11x.pt` once before DDP and pass its absolute path as `pretrained=/tmp/ultralytics_weights/yolo11x.pt`.
+- Relaunched detached training app: `ap-9QAh3tPpemcbYKztG83viN`.
+- Relaunched training function call: `fc-01KQPF72WX2SY2Z96N38MJ4QZR`.
+- Latest logs confirm the relaunch got past the previous checkpoint race: pretrained checkpoint downloaded once, DDP launched, `723/1253` pretrained items transferred, and AMP checks passed.
+- Current volume state: `/runs/yolo/open-cuas-yolo11x-p2` has `args.yaml` and an empty `weights/` directory; no epoch checkpoint has been written yet.
 
 ## Next Commands
 
@@ -148,15 +150,11 @@ modal run modal_app/train_yolo.py --action status
 modal volume ls cuas-data datasets/open-cuas
 ```
 
-Once `datasets/open-cuas/data.yaml` validates cleanly, launch training:
-
-```bash
-modal run modal_app/train_yolo.py --action train --data-yaml /data/datasets/open-cuas/data.yaml --epochs 200 --imgsz 1536 --batch -1
-```
-
 Use Modal logs when a run looks quiet:
 
 ```bash
 modal app list
-modal app logs <app-id>
+modal app logs ap-9QAh3tPpemcbYKztG83viN --timestamps
+modal volume ls cuas-runs yolo/open-cuas-yolo11x-p2
+modal volume ls cuas-runs yolo/open-cuas-yolo11x-p2/weights
 ```
