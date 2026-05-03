@@ -2,6 +2,7 @@ const cameraCanvas = document.getElementById("cameraCanvas");
 const cameraCtx = cameraCanvas.getContext("2d");
 const cameraVideo = document.getElementById("cameraVideo");
 const trackRows = document.getElementById("trackRows");
+const missionSummary = document.getElementById("missionSummary");
 const assetList = document.getElementById("assetList");
 const eventLog = document.getElementById("eventLog");
 const telemetry = window.DTI_TELEMETRY || null;
@@ -78,6 +79,7 @@ function tick() {
   updateTargets();
   assignAssets();
   drawCamera();
+  renderMissionSummary();
   renderAssets();
   renderTrackRows();
   renderEvents();
@@ -396,7 +398,8 @@ function projectCamera(target, w, h) {
 }
 
 function drawTarget(ctx, target, projection) {
-  const boxColor = target.className === "bird" ? "#f1c66d" : "#ff3b46";
+  const assigned = assignedAssetForTarget(target.id);
+  const boxColor = target.className === "bird" ? "#f1c66d" : assigned ? "#ff3b46" : "#4fe0a1";
   const textColor = "#4fe0a1";
   ctx.save();
   ctx.strokeStyle = boxColor;
@@ -424,8 +427,9 @@ function drawTarget(ctx, target, projection) {
   ctx.stroke();
 
   ctx.font = `${Math.max(12, cameraCanvas.width / 95)}px ui-sans-serif, system-ui`;
+  const assignmentText = assigned ? ` ${assigned.name.replace("Defender ", "D")}` : "";
   ctx.fillText(
-    `T${pad(target.id)} ${target.className} ${target.confidence.toFixed(2)} ${Math.round(target.z)}m`,
+    `T${pad(target.id)}${assignmentText} ${target.className} P${Math.round(target.priority)} ${Math.round(target.z)}m`,
     x,
     Math.max(18, y - 8),
   );
@@ -444,19 +448,51 @@ function drawCameraOverlays(w, h) {
   cameraCtx.fillText(`${rankedTargets().length} active tracks`, 34, 102);
 }
 
+function renderMissionSummary() {
+  if (!missionSummary) return;
+  const threats = activeThreats();
+  const assigned = threats.filter((target) => assignedAssetForTarget(target.id)).length;
+  const top = rankedThreats()[0];
+  const nearest = threats.reduce((best, target) => (!best || target.z < best.z ? target : best), null);
+  const avgRange = threats.length
+    ? Math.round(threats.reduce((sum, target) => sum + target.z, 0) / threats.length)
+    : 0;
+
+  missionSummary.innerHTML = `
+    <div class="summary-cell">
+      <span>tracks</span>
+      <strong>${threats.length}</strong>
+    </div>
+    <div class="summary-cell">
+      <span>assigned</span>
+      <strong>${assigned}/${threats.length}</strong>
+    </div>
+    <div class="summary-cell ${top ? "alert" : ""}">
+      <span>top priority</span>
+      <strong>${top ? `T${pad(top.id)} P${Math.round(top.priority)}` : "none"}</strong>
+    </div>
+    <div class="summary-cell">
+      <span>range</span>
+      <strong>${nearest ? `${Math.round(nearest.z)}m near / ${avgRange}m avg` : "none"}</strong>
+    </div>
+  `;
+}
+
 function renderAssets() {
   assetList.innerHTML = assets
     .map((asset) => {
       const statusClass = asset.status === "ready" ? "" : asset.status === "hold" ? "hold" : "offline";
-      const label = asset.track ? `assigned T${pad(asset.track)}` : asset.status;
+      const target = asset.track ? targets.find((item) => item.id === asset.track) : null;
+      const label = target ? `locked T${pad(target.id)}` : asset.status;
+      const detail = target ? `P${Math.round(target.priority)} / ${Math.round(target.z)}m` : asset.type;
       return `
         <div class="asset ${statusClass}">
           <div class="dot"></div>
           <div>
             <strong>${asset.name}</strong>
-            <span>${asset.type}</span>
+            <span>${target ? target.className : asset.type}</span>
           </div>
-          <code>${label}</code>
+          <code>${label}<span>${detail}</span></code>
         </div>
       `;
     })
@@ -489,6 +525,14 @@ function renderEvents() {
 
 function rankedTargets() {
   return [...targets].sort((a, b) => b.priority - a.priority);
+}
+
+function activeThreats() {
+  return targets.filter((target) => target.className !== "bird");
+}
+
+function rankedThreats() {
+  return activeThreats().sort((a, b) => b.priority - a.priority);
 }
 
 function assignedAssetForTarget(targetId) {

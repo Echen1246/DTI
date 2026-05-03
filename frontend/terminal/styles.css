@@ -99,10 +99,49 @@ body {
   overflow: hidden;
 }
 
-.asset-list {
-  height: calc(100% - 38px);
+.mission-summary {
   display: grid;
-  grid-auto-rows: minmax(38px, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  background: #0d1216;
+}
+
+.summary-cell {
+  min-width: 0;
+  padding: 8px;
+  background: var(--panel-2);
+  border: 1px solid rgba(148, 164, 173, 0.16);
+}
+
+.summary-cell span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.summary-cell strong {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.1;
+}
+
+.summary-cell.alert strong {
+  color: var(--red);
+}
+
+.asset-list {
+  height: calc(100% - 135px);
+  display: grid;
+  grid-auto-rows: minmax(54px, 1fr);
   gap: 6px;
   padding: 8px;
 }
@@ -150,6 +189,15 @@ body {
 .asset code {
   justify-self: end;
   color: var(--text);
+  text-align: right;
+}
+
+.asset code span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 10px;
 }
 
 .bottom-panel {
