@@ -8,19 +8,6 @@
 </head>
 <body>
   <main class="terminal-shell">
-    <header class="topbar">
-      <div>
-        <div class="brand">DTI</div>
-        <div class="subtitle">Passive optical airspace terminal</div>
-      </div>
-      <div class="top-metrics" aria-label="training and model status">
-        <div><span>model</span><strong>YOLO11x-P2</strong></div>
-        <div><span>checkpoint</span><strong>epoch 26</strong></div>
-        <div><span>mAP50</span><strong>0.58</strong></div>
-        <div><span>mode</span><strong>playback</strong></div>
-      </div>
-    </header>
-
     <section class="camera-panel" aria-label="main camera feed">
       <div class="panel-title">
         <span>Ground camera feed</span>
@@ -54,10 +41,6 @@
 
     <aside class="right-rail" aria-label="track space and assets">
       <section class="track-space-panel">
-        <div class="panel-title">
-          <span>Optical XYZ track space</span>
-          <strong id="trackCount">0 tracks</strong>
-        </div>
         <canvas id="spaceCanvas" width="520" height="330"></canvas>
       </section>
 
@@ -94,6 +77,6 @@
   </main>
 
   <script src="media/m2-res_720p_terminal_red_telemetry.js"></script>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>
