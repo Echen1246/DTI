@@ -9,6 +9,7 @@ APP_NAME = "cuas-yolo11-training"
 DATA_VOL_NAME = "cuas-data"
 RUNS_VOL_NAME = "cuas-runs"
 WORKDIR = "/workspace"
+YOLO11X_URL = "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11x.pt"
 
 app = modal.App(APP_NAME)
 data_volume = modal.Volume.from_name(DATA_VOL_NAME, create_if_missing=True)
@@ -107,6 +108,7 @@ def train_yolo11x_p2(
     runs_volume.reload()
 
     model_yaml = f"{WORKDIR}/configs/models/yolo11x-p2.yaml"
+    pretrained_ckpt = _ensure_yolo11x_checkpoint()
     project_dir = "/runs/yolo"
     device = "0,1,2,3,4,5,6,7"
 
@@ -119,7 +121,7 @@ def train_yolo11x_p2(
             "detect",
             "train",
             f"model={model_yaml}",
-            "pretrained=yolo11x.pt",
+            f"pretrained={pretrained_ckpt}",
             f"data={data_yaml}",
             f"epochs={epochs}",
             f"imgsz={imgsz}",
@@ -144,6 +146,38 @@ def train_yolo11x_p2(
     runs_volume.commit()
     data_volume.commit()
     return str(Path(project_dir) / run_name)
+
+
+def _ensure_yolo11x_checkpoint() -> str:
+    import urllib.request
+
+    dest = Path("/tmp/ultralytics_weights/yolo11x.pt")
+    min_bytes = 100 * 1024 * 1024
+    if dest.exists() and dest.stat().st_size >= min_bytes:
+        print(f"Using cached pretrained checkpoint: {dest} ({dest.stat().st_size} bytes)", flush=True)
+        return str(dest)
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(".pt.tmp")
+    if tmp.exists():
+        tmp.unlink()
+
+    print(f"Downloading pretrained checkpoint once before DDP: {YOLO11X_URL}", flush=True)
+    with urllib.request.urlopen(YOLO11X_URL, timeout=120) as response:
+        with tmp.open("wb") as f:
+            while True:
+                chunk = response.read(16 * 1024 * 1024)
+                if not chunk:
+                    break
+                f.write(chunk)
+                print(f"Downloaded {tmp.stat().st_size} bytes", flush=True)
+
+    size = tmp.stat().st_size
+    if size < min_bytes:
+        raise RuntimeError(f"Downloaded checkpoint is too small: {size} bytes")
+    tmp.replace(dest)
+    print(f"Pretrained checkpoint ready: {dest} ({size} bytes)", flush=True)
+    return str(dest)
 
 
 @app.function(

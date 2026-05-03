@@ -131,6 +131,7 @@ Key files:
 - Training function call: `fc-01KQPD527KTBQNZ0ZDGNJCDN7W`
 - Training config: `epochs=200`, `imgsz=1536`, `batch=64`, `device=0,1,2,3,4,5,6,7`
 - Earlier failed launch `ap-hwdZ1pcmme2MDgMdnvkYF1` died before epoch 1 because Ultralytics does not support `batch=-1` AutoBatch in multi-GPU training.
+- Training call `fc-01KQPD527KTBQNZ0ZDGNJCDN7W` also failed before epoch 1 because DDP ranks raced to download/read `yolo11x.pt`, corrupting the partial checkpoint read. Fix: download `yolo11x.pt` once before DDP and pass its absolute path as `pretrained=...`.
 
 ## Next Commands
 
