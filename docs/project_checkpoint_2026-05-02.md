@@ -126,11 +126,15 @@ Key files:
 - Current working scaffold is in `/Users/eddie/Documents/natsec`.
 - GitHub target repo was cloned into `/Users/eddie/Documents/natsec/DTI`.
 - Initial scaffold checkpoint was pushed to `main` as commit `bd44b98`.
-- Next blocker is launching and monitoring the first YOLO11x-P2 training job.
+- First YOLO11x-P2 training job was spawned after fixing multi-GPU batch sizing.
+- Training app: `ap-xcc3QtepwhjtNyvTFjgUkU`
+- Training function call: `fc-01KQPD527KTBQNZ0ZDGNJCDN7W`
+- Training config: `epochs=200`, `imgsz=1536`, `batch=64`, `device=0,1,2,3,4,5,6,7`
+- Earlier failed launch `ap-hwdZ1pcmme2MDgMdnvkYF1` died before epoch 1 because Ultralytics does not support `batch=-1` AutoBatch in multi-GPU training.
 
 ## Next Commands
 
-Dataset prep is complete. Launch training:
+Dataset prep is complete. Training was launched with:
 
 ```bash
 modal run -d modal_app/train_yolo.py --action train_spawn --data-yaml /data/datasets/open-cuas/data.yaml --epochs 200 --imgsz 1536 --batch 64
