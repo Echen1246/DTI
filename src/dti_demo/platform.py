@@ -208,6 +208,7 @@ def run_demo(
     camera_pose = camera_pose or CameraPose()
     tracker = GreedyTracker()
     events: list[dict] = []
+    frame_tracks: list[dict] = []
     latest_tracks: list[Track] = []
 
     if synthetic or source is None:
@@ -257,6 +258,13 @@ def run_demo(
         _enrich_tracks(tracks, width, height, camera_pose)
         annotated = _draw_dashboard_frame(frame, tracks, camera_pose, side_panel=side_panel)
         writer.write(annotated)
+        frame_tracks.append(
+            {
+                "frame": frame_idx,
+                "time_s": round(frame_idx / fps, 4),
+                "tracks": [_track_json(track) for track in tracks if track.misses == 0],
+            }
+        )
         if frame_idx % max(1, int(fps)) == 0:
             events.append(
                 {
@@ -278,6 +286,7 @@ def run_demo(
         "fps": fps,
         "camera": asdict(camera_pose),
         "latest_tracks": [_track_json(track) for track in latest_tracks],
+        "frame_tracks": frame_tracks,
         "events": events,
         "mode": "synthetic" if synthetic_detector is not None else "model",
         "weights": str(weights) if weights else None,
@@ -592,6 +601,7 @@ def _track_json(track: Track) -> dict:
         "track_id": track.track_id,
         "class_name": track.class_name,
         "confidence": round(track.confidence, 3),
+        "xyxy": [round(value, 2) for value in track.xyxy],
         "range_m": None if track.range_m is None else round(track.range_m, 1),
         "range_min_m": None if track.range_min_m is None else round(track.range_min_m, 1),
         "range_max_m": None if track.range_max_m is None else round(track.range_max_m, 1),

@@ -8,6 +8,10 @@ const assetList = document.getElementById("assetList");
 const eventLog = document.getElementById("eventLog");
 const frameCounter = document.getElementById("frameCounter");
 const trackCount = document.getElementById("trackCount");
+const telemetry = window.DTI_TELEMETRY || null;
+const trackHistory = new Map();
+const lockedAssignments = new Map();
+const lostAssignmentFrames = new Map();
 
 const camera = {
   hfovDeg: 62,
@@ -24,7 +28,7 @@ const assets = [
   { name: "Defender F", type: "maintenance", status: "offline", x: 1040, z: 640, track: null },
 ];
 
-const targets = [
+let targets = [
   makeTarget(1, "unknown_uav", -620, 180, 980, 8.5, 0.15, -9),
   makeTarget(7, "unknown_uav", -250, 210, 1160, 6.2, -0.2, -11),
   makeTarget(3, "unknown_uav", -40, 235, 870, 4.5, 0.1, -7),
@@ -91,6 +95,11 @@ function tick() {
 }
 
 function updateTargets() {
+  if (telemetry?.frame_tracks?.length) {
+    updateTelemetryTargets();
+    return;
+  }
+
   for (const target of targets) {
     target.x += target.vx;
     target.y += target.vy + Math.sin(frame / 55 + target.id) * 0.12;
@@ -126,13 +135,98 @@ function updateTargets() {
   }
 }
 
+function updateTelemetryTargets() {
+  const index = currentTelemetryFrameIndex();
+  const entry = telemetry.frame_tracks[index] || telemetry.frame_tracks[telemetry.frame_tracks.length - 1];
+  targets = (entry?.tracks || []).map((track) => telemetryTrackToTarget(track));
+  for (const target of targets) {
+    const history = trackHistory.get(target.id) || [];
+    history.push({ x: target.x, y: target.y, z: target.z });
+    if (history.length > 54) history.shift();
+    target.trail = history;
+    trackHistory.set(target.id, history);
+  }
+
+  if (frame % 90 === 0 && targets.length) {
+    const top = rankedTargets()[0];
+    events.unshift(`Track ${pad(top.id)} locked: priority ${top.priority} at ${Math.round(top.z)}m.`);
+    events.splice(8);
+  }
+}
+
+function telemetryTrackToTarget(track) {
+  const range = Number(track.range_m) || 1200;
+  const bearing = Number(track.bearing_deg) || cameraHeadingDeg();
+  const bearingOffset = (bearing - cameraHeadingDeg()) * (Math.PI / 180);
+  const xyxy = Array.isArray(track.xyxy) ? track.xyxy : [0, 0, 0, 0];
+  const centerY = (Number(xyxy[1]) + Number(xyxy[3])) / 2 || 360;
+  const elevation = clamp((0.54 - centerY / 720) * range * 0.6, -180, 360);
+  return {
+    id: Number(track.track_id),
+    className: track.class_name || "unknown_uav",
+    x: Math.tan(bearingOffset) * range,
+    y: elevation,
+    z: range,
+    vx: 0,
+    vy: 0,
+    vz: 0,
+    confidence: Number(track.confidence) || 0,
+    trail: [],
+    box: null,
+    priority: Number(track.priority) || 0,
+  };
+}
+
+function currentTelemetryFrameIndex() {
+  const frames = telemetry?.frame_tracks?.length || 1;
+  const fps = Number(telemetry?.fps) || 30;
+  if (cameraVideo && Number.isFinite(cameraVideo.currentTime)) {
+    return Math.max(0, Math.min(frames - 1, Math.floor(cameraVideo.currentTime * fps)));
+  }
+  return frame % frames;
+}
+
 function assignAssets() {
-  for (const asset of assets) asset.track = null;
-  const readyAssets = assets.filter((asset) => asset.status !== "offline");
   const activeTargets = rankedTargets().filter((target) => target.className !== "bird");
-  const assignments = solveAssignment(readyAssets, activeTargets);
+  const activeIds = new Set(activeTargets.map((target) => target.id));
+
+  for (const asset of assets) {
+    if (asset.status === "offline") {
+      asset.track = null;
+      lockedAssignments.delete(asset.name);
+      continue;
+    }
+
+    const lockedTarget = lockedAssignments.get(asset.name);
+    if (!lockedTarget) {
+      asset.track = null;
+      continue;
+    }
+
+    if (activeIds.has(lockedTarget)) {
+      asset.track = lockedTarget;
+      lostAssignmentFrames.delete(asset.name);
+      continue;
+    }
+
+    const misses = (lostAssignmentFrames.get(asset.name) || 0) + 1;
+    lostAssignmentFrames.set(asset.name, misses);
+    if (misses > 45) {
+      lockedAssignments.delete(asset.name);
+      asset.track = null;
+    }
+  }
+
+  const lockedTargetIds = new Set([...lockedAssignments.values()].filter((targetId) => activeIds.has(targetId)));
+  const openAssets = assets.filter((asset) => asset.status !== "offline" && !lockedAssignments.has(asset.name));
+  const openTargets = activeTargets.filter((target) => !lockedTargetIds.has(target.id));
+  const assignments = solveAssignment(openAssets, openTargets);
+
   for (const assignment of assignments) {
-    readyAssets[assignment.assetIndex].track = activeTargets[assignment.targetIndex].id;
+    const asset = openAssets[assignment.assetIndex];
+    const target = openTargets[assignment.targetIndex];
+    lockedAssignments.set(asset.name, target.id);
+    asset.track = target.id;
   }
 }
 
@@ -481,7 +575,11 @@ function assignmentCost(asset, target) {
 }
 
 function bearingDeg(target) {
-  return 35 + Math.atan2(target.x, target.z) * (180 / Math.PI);
+  return cameraHeadingDeg() + Math.atan2(target.x, target.z) * (180 / Math.PI);
+}
+
+function cameraHeadingDeg() {
+  return Number(telemetry?.camera?.heading_deg) || 35;
 }
 
 function line(x1, y1, x2, y2) {
