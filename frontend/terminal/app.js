@@ -456,30 +456,38 @@ function drawTrackSpace() {
   spaceCtx.fillStyle = "#0e1419";
   spaceCtx.fillRect(0, 0, w, h);
 
-  const origin = { x: w * 0.16, y: h * 0.78 };
+  const origin = { x: w * 0.5, y: h * 0.86 };
   const trackSpaceScale = computeTrackSpaceScale(w, h);
-  drawAxes(origin, w, h);
+  drawAxes(origin, w, h, trackSpaceScale);
   drawStatePoints(origin, trackSpaceScale);
 }
 
-function drawAxes(origin, w, h) {
-  const xAxis = { x: w * 0.32, y: -h * 0.12 };
-  const zAxis = { x: w * 0.48, y: -h * 0.26 };
-  const yAxis = { x: 0, y: -h * 0.52 };
+function drawAxes(origin, w, h, trackSpaceScale) {
+  const farY = origin.y - trackSpaceScale.zLen;
+  const nearY = origin.y - h * 0.08;
+  const nearHalfWidth = w * 0.07;
+  const farHalfWidth = trackSpaceScale.xLen;
 
-  spaceCtx.strokeStyle = "#73b7ff";
+  spaceCtx.lineWidth = 1;
+  spaceCtx.strokeStyle = "rgba(148, 164, 173, 0.22)";
+  line(origin.x, origin.y, origin.x - farHalfWidth, farY);
+  line(origin.x, origin.y, origin.x + farHalfWidth, farY);
+  line(origin.x - nearHalfWidth, nearY, origin.x + nearHalfWidth, nearY);
+  line(origin.x - farHalfWidth, farY, origin.x + farHalfWidth, farY);
+
   spaceCtx.lineWidth = 2;
-  line(origin.x, origin.y, origin.x + xAxis.x, origin.y + xAxis.y);
-  spaceCtx.strokeStyle = "#4fe0a1";
-  line(origin.x, origin.y, origin.x + yAxis.x, origin.y + yAxis.y);
   spaceCtx.strokeStyle = "#f1c66d";
-  line(origin.x, origin.y, origin.x + zAxis.x, origin.y + zAxis.y);
+  line(origin.x, origin.y, origin.x, farY);
+  spaceCtx.strokeStyle = "#73b7ff";
+  line(origin.x - farHalfWidth, farY, origin.x + farHalfWidth, farY);
+  spaceCtx.strokeStyle = "#4fe0a1";
+  line(origin.x + farHalfWidth + w * 0.05, farY + trackSpaceScale.yLen, origin.x + farHalfWidth + w * 0.05, farY - trackSpaceScale.yLen);
 
   spaceCtx.fillStyle = "#9fb0ba";
   spaceCtx.font = `${Math.max(12, w / 42)}px ui-sans-serif, system-ui`;
-  spaceCtx.fillText("X", origin.x + xAxis.x + 8, origin.y + xAxis.y - 4);
-  spaceCtx.fillText("Y", origin.x + yAxis.x + 8, origin.y + yAxis.y + 12);
-  spaceCtx.fillText("Z", origin.x + zAxis.x + 8, origin.y + zAxis.y - 4);
+  spaceCtx.fillText("X", origin.x + farHalfWidth + 8, farY + 4);
+  spaceCtx.fillText("Y", origin.x + farHalfWidth + w * 0.05 + 8, farY - trackSpaceScale.yLen - 4);
+  spaceCtx.fillText("Z", origin.x + 8, farY - 8);
 }
 
 function drawStatePoints(origin, trackSpaceScale) {
@@ -511,9 +519,10 @@ function projectStatePoint(target, origin, trackSpaceScale) {
   const xNorm = clamp(target.x / trackSpaceScale.maxAbsX, -1, 1);
   const zNorm = clamp((target.z - trackSpaceScale.minZ) / Math.max(1, trackSpaceScale.maxZ - trackSpaceScale.minZ), 0, 1);
   const yNorm = clamp(target.y / trackSpaceScale.maxAbsY, -1, 1);
+  const lateralSpread = trackSpaceScale.xLen * (0.22 + 0.78 * zNorm);
   return {
-    x: origin.x + xNorm * trackSpaceScale.xLen + zNorm * trackSpaceScale.zLen,
-    y: origin.y - yNorm * trackSpaceScale.yLen - zNorm * trackSpaceScale.zRise,
+    x: origin.x + xNorm * lateralSpread,
+    y: origin.y - zNorm * trackSpaceScale.zLen - yNorm * trackSpaceScale.yLen,
   };
 }
 
@@ -529,11 +538,10 @@ function computeTrackSpaceScale(w, h) {
     minZ,
     maxZ,
     maxAbsX: Math.max(20, Math.max(...xValues, 20) * 1.35),
-    maxAbsY: Math.max(15, Math.max(...yValues, 15) * 1.6),
-    xLen: w * 0.3,
-    zLen: w * 0.48,
-    yLen: h * 0.38,
-    zRise: h * 0.26,
+    maxAbsY: Math.max(18, Math.max(...yValues, 18) * 1.7),
+    xLen: w * 0.38,
+    zLen: h * 0.62,
+    yLen: h * 0.17,
   };
 }
 
