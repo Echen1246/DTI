@@ -9,6 +9,7 @@ const telemetry = window.DTI_TELEMETRY || null;
 const trackHistory = new Map();
 const lockedAssignments = new Map();
 const lostAssignmentFrames = new Map();
+const TELEMETRY_FRAME_LEAD = 2;
 
 const camera = {
   hfovDeg: 62,
@@ -17,12 +18,12 @@ const camera = {
 };
 
 const assets = [
-  { name: "Defender A", type: "quadrotor", status: "ready", x: -720, z: 760, track: null },
-  { name: "Defender B", type: "quadrotor", status: "ready", x: -220, z: 680, track: null },
-  { name: "Defender C", type: "quadrotor", status: "ready", x: 260, z: 700, track: null },
-  { name: "Defender D", type: "quadrotor", status: "ready", x: 720, z: 820, track: null },
-  { name: "Defender E", type: "standby", status: "hold", x: 0, z: 520, track: null },
-  { name: "Defender F", type: "maintenance", status: "offline", x: 1040, z: 640, track: null },
+  { name: "Defender A", status: "ready", x: -720, z: 760, track: null },
+  { name: "Defender B", status: "ready", x: -220, z: 680, track: null },
+  { name: "Defender C", status: "ready", x: 260, z: 700, track: null },
+  { name: "Defender D", status: "ready", x: 720, z: 820, track: null },
+  { name: "Defender E", status: "hold", x: 0, z: 520, track: null },
+  { name: "Defender F", status: "offline", x: 1040, z: 640, track: null },
 ];
 
 let targets = [
@@ -201,7 +202,7 @@ function currentTelemetryFrameIndex() {
   const frames = telemetry?.frame_tracks?.length || 1;
   const fps = Number(telemetry?.fps) || 30;
   if (cameraVideo && Number.isFinite(cameraVideo.currentTime)) {
-    return Math.max(0, Math.min(frames - 1, Math.floor(cameraVideo.currentTime * fps)));
+    return Math.max(0, Math.min(frames - 1, Math.floor(cameraVideo.currentTime * fps) + TELEMETRY_FRAME_LEAD));
   }
   return frame % frames;
 }
@@ -427,7 +428,7 @@ function drawTarget(ctx, target, projection) {
   ctx.stroke();
 
   ctx.font = `${Math.max(12, cameraCanvas.width / 95)}px ui-sans-serif, system-ui`;
-  const assignmentText = assigned ? ` ${assigned.name.replace("Defender ", "D")}` : "";
+  const assignmentText = assigned ? ` ${assetShortName(assigned)}` : "";
   ctx.fillText(
     `T${pad(target.id)}${assignmentText} ${target.className} P${Math.round(target.priority)} ${Math.round(target.z)}m`,
     x,
@@ -481,18 +482,22 @@ function renderMissionSummary() {
 function renderAssets() {
   assetList.innerHTML = assets
     .map((asset) => {
-      const statusClass = asset.status === "ready" ? "" : asset.status === "hold" ? "hold" : "offline";
       const target = asset.track ? targets.find((item) => item.id === asset.track) : null;
-      const label = target ? `locked T${pad(target.id)}` : asset.status;
-      const detail = target ? `P${Math.round(target.priority)} / ${Math.round(target.z)}m` : asset.type;
+      const statusClass = target ? "assigned" : asset.status === "offline" ? "offline" : "idle";
+      const targetLabel = target ? `T${pad(target.id)}` : "--";
+      const detail = target
+        ? `P${Math.round(target.priority)} / ${Math.round(target.z)}m`
+        : asset.status === "offline"
+          ? "unavailable"
+          : "no target";
       return `
         <div class="asset ${statusClass}">
           <div class="dot"></div>
           <div>
             <strong>${asset.name}</strong>
-            <span>${target ? target.className : asset.type}</span>
+            <span>${target ? `target ${targetLabel}` : detail}</span>
           </div>
-          <code>${label}<span>${detail}</span></code>
+          <code>${targetLabel}<span>${detail}</span></code>
         </div>
       `;
     })
@@ -537,6 +542,10 @@ function rankedThreats() {
 
 function assignedAssetForTarget(targetId) {
   return assets.find((asset) => asset.track === targetId);
+}
+
+function assetShortName(asset) {
+  return asset.name.replace("Defender ", "D-");
 }
 
 function solveAssignment(candidateAssets, candidateTargets) {

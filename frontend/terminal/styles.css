@@ -161,6 +161,14 @@ body {
   width: 9px;
   height: 9px;
   border-radius: 50%;
+  background: var(--faint);
+}
+
+.asset.assigned .dot {
+  background: var(--red);
+}
+
+.asset.idle .dot {
   background: var(--green);
 }
 
