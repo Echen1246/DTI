@@ -140,8 +140,12 @@ function drawCamera() {
   const w = cameraCanvas.width;
   const h = cameraCanvas.height;
   cameraCtx.clearRect(0, 0, w, h);
-  if (hasVideoFeed()) {
-    drawVideoOverlays(w, h);
+
+  if (hasConfiguredVideo()) {
+    if (!hasVideoFeed()) {
+      drawVideoLoadingState(w, h);
+      requestVideoPlayback();
+    }
     return;
   }
 
@@ -172,8 +176,26 @@ function hasVideoFeed() {
   return cameraVideo && cameraVideo.readyState >= 2;
 }
 
-function drawVideoOverlays(w, h) {
-  cameraCtx.clearRect(0, 0, w, h);
+function hasConfiguredVideo() {
+  return Boolean(cameraVideo?.getAttribute("src"));
+}
+
+function requestVideoPlayback() {
+  if (!cameraVideo || !cameraVideo.paused) return;
+  const playRequest = cameraVideo.play();
+  if (playRequest?.catch) playRequest.catch(() => {});
+}
+
+function drawVideoLoadingState(w, h) {
+  cameraCtx.save();
+  cameraCtx.fillStyle = "rgba(5, 8, 10, 0.92)";
+  cameraCtx.fillRect(0, 0, w, h);
+  cameraCtx.fillStyle = "#edf4f7";
+  cameraCtx.font = `${Math.max(14, w / 76)}px ui-sans-serif, system-ui`;
+  cameraCtx.fillText("LOADING REAL CAMERA PLAYBACK", 34, 52);
+  cameraCtx.fillStyle = "#4fe0a1";
+  cameraCtx.fillText("m2-res_720p_terminal_red.mp4", 34, 82);
+  cameraCtx.restore();
 }
 
 function drawCloudBand(w, h) {
