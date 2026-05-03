@@ -1,0 +1,37 @@
+[project]
+name = "natsec-cuas"
+version = "0.1.0"
+description = "Camera-cued counter-UAS detection, tracking, and allocation scaffold."
+requires-python = ">=3.11"
+dependencies = [
+  "modal>=1.1,<2",
+  "ultralytics>=8.3.0",
+  "sahi>=0.11.20",
+  "opencv-python>=4.10.0",
+  "pandas>=2.2.0",
+  "pyyaml>=6.0.2",
+  "tqdm>=4.66.0",
+  "pillow>=10.4.0",
+  "scipy>=1.13.0",
+  "lap>=0.5.12",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0",
+  "ruff>=0.6.0",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
