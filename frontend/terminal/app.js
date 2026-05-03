@@ -134,7 +134,13 @@ function updateTargets() {
 function updateTelemetryTargets() {
   const index = currentTelemetryFrameIndex();
   const entry = telemetry.frame_tracks[index] || telemetry.frame_tracks[telemetry.frame_tracks.length - 1];
-  targets = (entry?.tracks || []).map((track) => telemetryTrackToTarget(track));
+  const rawTrackById = new Map((entry?.tracks || []).map((track) => [Number(track.track_id), track]));
+  const stateEntry = telemetry.track_state_frames?.[index];
+  if (stateEntry?.states?.length) {
+    targets = stateEntry.states.map((state) => trackStateToTarget(state, rawTrackById.get(Number(state.track_id))));
+  } else {
+    targets = (entry?.tracks || []).map((track) => telemetryTrackToTarget(track));
+  }
   for (const target of targets) {
     const history = trackHistory.get(target.id) || [];
     history.push({ x: target.x, y: target.y, z: target.z });
@@ -148,6 +154,27 @@ function updateTelemetryTargets() {
     events.unshift(`Track ${pad(top.id)} locked: priority ${top.priority} at ${Math.round(top.z)}m.`);
     events.splice(8);
   }
+}
+
+function trackStateToTarget(state, rawTrack = null) {
+  const xyz = Array.isArray(state.xyz_m) ? state.xyz_m : [0, 0, 120];
+  const velocity = Array.isArray(state.velocity_mps) ? state.velocity_mps : [0, 0, 0];
+  return {
+    id: Number(state.track_id),
+    className: state.class_name || "unknown_uav",
+    x: Number(xyz[0]) || 0,
+    y: Number(xyz[1]) || 0,
+    z: Number(xyz[2]) || 0,
+    vx: Number(velocity[0]) || 0,
+    vy: Number(velocity[1]) || 0,
+    vz: Number(velocity[2]) || 0,
+    confidence: Number(state.confidence) || 0,
+    trail: [],
+    box: Array.isArray(rawTrack?.xyxy) ? rawTrack.xyxy.map(Number) : null,
+    priority: Number(state.priority) || 0,
+    uncertainty: state.uncertainty_m || null,
+    quality: Number(state.quality) || 0,
+  };
 }
 
 function telemetryTrackToTarget(track) {
@@ -168,7 +195,7 @@ function telemetryTrackToTarget(track) {
     vz: 0,
     confidence: Number(track.confidence) || 0,
     trail: [],
-    box: null,
+    box: Array.isArray(track.xyxy) ? track.xyxy.map(Number) : null,
     priority: Number(track.priority) || 0,
   };
 }
@@ -234,7 +261,9 @@ function drawCamera() {
   if (hasConfiguredVideo()) {
     if (!hasVideoFeed()) {
       drawVideoLoadingState(w, h);
+      return;
     }
+    drawVideoDetections(w, h);
     return;
   }
 
@@ -273,12 +302,51 @@ function drawVideoLoadingState(w, h) {
   cameraCtx.save();
   cameraCtx.fillStyle = "rgba(5, 8, 10, 0.92)";
   cameraCtx.fillRect(0, 0, w, h);
-  cameraCtx.fillStyle = "#edf4f7";
-  cameraCtx.font = `${Math.max(14, w / 76)}px ui-sans-serif, system-ui`;
-  cameraCtx.fillText("LOADING CAMERA PLAYBACK", 34, 52);
-  cameraCtx.fillStyle = "#4fe0a1";
-  cameraCtx.fillText("press play when ready", 34, 82);
   cameraCtx.restore();
+}
+
+function drawVideoDetections(w, h) {
+  const videoRect = videoContentRect(w, h);
+  for (const target of targets) {
+    if (!Array.isArray(target.box) || target.box.length !== 4) continue;
+    const projection = projectVideoBox(target.box, videoRect);
+    if (!projection.visible) continue;
+    drawTarget(cameraCtx, target, projection);
+  }
+}
+
+function videoContentRect(w, h) {
+  const sourceW = Number(telemetry?.image_width) || cameraVideo.videoWidth || 1280;
+  const sourceH = Number(telemetry?.image_height) || cameraVideo.videoHeight || 720;
+  const scale = Math.min(w / sourceW, h / sourceH);
+  const width = sourceW * scale;
+  const height = sourceH * scale;
+  return {
+    x: (w - width) / 2,
+    y: (h - height) / 2,
+    width,
+    height,
+    sourceW,
+    sourceH,
+  };
+}
+
+function projectVideoBox(xyxy, rect) {
+  const [x1, y1, x2, y2] = xyxy;
+  const left = rect.x + (x1 / rect.sourceW) * rect.width;
+  const top = rect.y + (y1 / rect.sourceH) * rect.height;
+  const right = rect.x + (x2 / rect.sourceW) * rect.width;
+  const bottom = rect.y + (y2 / rect.sourceH) * rect.height;
+  return {
+    x: (left + right) / 2,
+    y: (top + bottom) / 2,
+    boxX: left,
+    boxY: top,
+    boxW: right - left,
+    boxH: bottom - top,
+    size: Math.max(8, bottom - top),
+    visible: right >= 0 && bottom >= 0 && left <= cameraCanvas.width && top <= cameraCanvas.height,
+  };
 }
 
 function drawCloudBand(w, h) {
@@ -340,10 +408,10 @@ function drawTarget(ctx, target, projection) {
   ctx.fillStyle = textColor;
   ctx.lineWidth = 2;
 
-  const boxW = projection.size * (target.className === "bird" ? 2.2 : 1.5);
-  const boxH = projection.size;
-  const x = projection.x - boxW / 2;
-  const y = projection.y - boxH / 2;
+  const boxW = projection.boxW || projection.size * (target.className === "bird" ? 2.2 : 1.5);
+  const boxH = projection.boxH || projection.size;
+  const x = projection.boxX ?? projection.x - boxW / 2;
+  const y = projection.boxY ?? projection.y - boxH / 2;
   ctx.strokeRect(x, y, boxW, boxH);
 
   ctx.beginPath();
@@ -389,7 +457,9 @@ function drawTrackSpace() {
   spaceCtx.fillRect(0, 0, w, h);
 
   const origin = { x: w * 0.16, y: h * 0.78 };
+  const trackSpaceScale = computeTrackSpaceScale(w, h);
   drawAxes(origin, w, h);
+  drawStatePoints(origin, trackSpaceScale);
 }
 
 function drawAxes(origin, w, h) {
@@ -410,7 +480,61 @@ function drawAxes(origin, w, h) {
   spaceCtx.fillText("X", origin.x + xAxis.x + 8, origin.y + xAxis.y - 4);
   spaceCtx.fillText("Y", origin.x + yAxis.x + 8, origin.y + yAxis.y + 12);
   spaceCtx.fillText("Z", origin.x + zAxis.x + 8, origin.y + zAxis.y - 4);
-  spaceCtx.fillText("camera", origin.x - 22, origin.y + 24);
+}
+
+function drawStatePoints(origin, trackSpaceScale) {
+  for (const target of rankedTargets().filter((item) => item.className !== "bird")) {
+    const point = projectStatePoint(target, origin, trackSpaceScale);
+    const assigned = assignedAssetForTarget(target.id);
+    const rangeSigma = target.uncertainty?.range_sigma || 20;
+    const radius = clamp(3 + target.quality * 6, 4, 9);
+    const uncertaintyRadius = clamp(rangeSigma / trackSpaceScale.maxZ * trackSpaceScale.zLen, 10, 42);
+
+    spaceCtx.strokeStyle = "rgba(79, 224, 161, 0.18)";
+    spaceCtx.lineWidth = 1;
+    spaceCtx.beginPath();
+    spaceCtx.arc(point.x, point.y, uncertaintyRadius, 0, Math.PI * 2);
+    spaceCtx.stroke();
+
+    spaceCtx.fillStyle = "#4fe0a1";
+    spaceCtx.beginPath();
+    spaceCtx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    spaceCtx.fill();
+
+    spaceCtx.fillStyle = "#edf3f6";
+    spaceCtx.font = `${Math.max(11, spaceCanvas.width / 52)}px ui-sans-serif, system-ui`;
+    spaceCtx.fillText(`T${pad(target.id)}${assigned ? `:${assigned.name.split(" ").pop()}` : ""}`, point.x + 11, point.y - 6);
+  }
+}
+
+function projectStatePoint(target, origin, trackSpaceScale) {
+  const xNorm = clamp(target.x / trackSpaceScale.maxAbsX, -1, 1);
+  const zNorm = clamp((target.z - trackSpaceScale.minZ) / Math.max(1, trackSpaceScale.maxZ - trackSpaceScale.minZ), 0, 1);
+  const yNorm = clamp(target.y / trackSpaceScale.maxAbsY, -1, 1);
+  return {
+    x: origin.x + xNorm * trackSpaceScale.xLen + zNorm * trackSpaceScale.zLen,
+    y: origin.y - yNorm * trackSpaceScale.yLen - zNorm * trackSpaceScale.zRise,
+  };
+}
+
+function computeTrackSpaceScale(w, h) {
+  const states = (telemetry?.track_state_frames || []).flatMap((frameState) => frameState.states || []);
+  const xyzValues = states.map((state) => state.xyz_m).filter(Array.isArray);
+  const xValues = xyzValues.map((xyz) => Math.abs(Number(xyz[0]) || 0));
+  const yValues = xyzValues.map((xyz) => Math.abs(Number(xyz[1]) || 0));
+  const zValues = xyzValues.map((xyz) => Number(xyz[2]) || 0).filter((value) => value > 0);
+  const minZ = Math.max(0, Math.min(...zValues, 40) - 10);
+  const maxZ = Math.max(...zValues, 160) + 10;
+  return {
+    minZ,
+    maxZ,
+    maxAbsX: Math.max(20, Math.max(...xValues, 20) * 1.35),
+    maxAbsY: Math.max(15, Math.max(...yValues, 15) * 1.6),
+    xLen: w * 0.3,
+    zLen: w * 0.48,
+    yLen: h * 0.38,
+    zRise: h * 0.26,
+  };
 }
 
 function renderAssets() {

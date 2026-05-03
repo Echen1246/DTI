@@ -67,6 +67,7 @@ body {
 
 .camera-stage {
   position: relative;
+  height: 100%;
   min-height: 0;
   background: #020405;
   overflow: hidden;
