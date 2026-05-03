@@ -101,8 +101,8 @@ body {
 
 .mission-summary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
   padding: 8px;
   border-bottom: 1px solid var(--line);
   background: #0d1216;
@@ -138,10 +138,47 @@ body {
   color: var(--red);
 }
 
-.asset-list {
-  height: calc(100% - 135px);
+.target-range-list {
+  grid-column: 1 / -1;
   display: grid;
-  grid-auto-rows: minmax(54px, 1fr);
+  gap: 4px;
+}
+
+.target-range {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  padding: 4px 7px;
+  background: var(--panel-2);
+  border: 1px solid rgba(148, 164, 173, 0.16);
+}
+
+.target-range span,
+.target-range code {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.target-range strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.target-range.assigned strong,
+.target-range.assigned span {
+  color: var(--red);
+}
+
+.target-range code {
+  justify-self: end;
+}
+
+.asset-list {
+  height: calc(100% - 245px);
+  display: grid;
+  grid-auto-rows: minmax(48px, 1fr);
   gap: 6px;
   padding: 8px;
 }

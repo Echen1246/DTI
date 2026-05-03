@@ -454,10 +454,18 @@ function renderMissionSummary() {
   const threats = activeThreats();
   const assigned = threats.filter((target) => assignedAssetForTarget(target.id)).length;
   const top = rankedThreats()[0];
-  const nearest = threats.reduce((best, target) => (!best || target.z < best.z ? target : best), null);
-  const avgRange = threats.length
-    ? Math.round(threats.reduce((sum, target) => sum + target.z, 0) / threats.length)
-    : 0;
+  const targetRanges = rankedThreats()
+    .map((target) => {
+      const assignment = assignedAssetForTarget(target.id);
+      return `
+        <div class="target-range ${assignment ? "assigned" : ""}">
+          <span>T${pad(target.id)}</span>
+          <strong>${Math.round(target.z)}m</strong>
+          <code>P${Math.round(target.priority)}</code>
+        </div>
+      `;
+    })
+    .join("");
 
   missionSummary.innerHTML = `
     <div class="summary-cell">
@@ -472,9 +480,8 @@ function renderMissionSummary() {
       <span>top priority</span>
       <strong>${top ? `T${pad(top.id)} P${Math.round(top.priority)}` : "none"}</strong>
     </div>
-    <div class="summary-cell">
-      <span>range</span>
-      <strong>${nearest ? `${Math.round(nearest.z)}m near / ${avgRange}m avg` : "none"}</strong>
+    <div class="target-range-list">
+      ${targetRanges || '<div class="target-range empty"><span>--</span><strong>none</strong><code></code></div>'}
     </div>
   `;
 }
