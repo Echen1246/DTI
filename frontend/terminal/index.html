@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DTI Optical Airspace Terminal</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
   <main class="terminal-shell">
@@ -30,9 +30,8 @@
         <video
           id="cameraVideo"
           src="media/m2-res_720p_terminal_red_h264.mp4"
-          autoplay
-          muted
-          loop
+          controls
+          preload="auto"
           playsinline
         ></video>
         <canvas id="cameraCanvas" width="1280" height="720"></canvas>
@@ -71,7 +70,7 @@
       </section>
     </aside>
 
-    <section class="bottom-panel" aria-label="track table and event log">
+    <section class="bottom-panel" aria-label="track table and event log" hidden>
       <div class="track-table">
         <div class="table-head">
           <span>id</span>
@@ -95,6 +94,6 @@
   </main>
 
   <script src="media/m2-res_720p_terminal_red_telemetry.js"></script>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

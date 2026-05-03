@@ -238,7 +238,6 @@ function drawCamera() {
   if (hasConfiguredVideo()) {
     if (!hasVideoFeed()) {
       drawVideoLoadingState(w, h);
-      requestVideoPlayback();
     }
     return;
   }
@@ -274,21 +273,15 @@ function hasConfiguredVideo() {
   return Boolean(cameraVideo?.getAttribute("src"));
 }
 
-function requestVideoPlayback() {
-  if (!cameraVideo || !cameraVideo.paused) return;
-  const playRequest = cameraVideo.play();
-  if (playRequest?.catch) playRequest.catch(() => {});
-}
-
 function drawVideoLoadingState(w, h) {
   cameraCtx.save();
   cameraCtx.fillStyle = "rgba(5, 8, 10, 0.92)";
   cameraCtx.fillRect(0, 0, w, h);
   cameraCtx.fillStyle = "#edf4f7";
   cameraCtx.font = `${Math.max(14, w / 76)}px ui-sans-serif, system-ui`;
-  cameraCtx.fillText("LOADING REAL CAMERA PLAYBACK", 34, 52);
+  cameraCtx.fillText("LOADING CAMERA PLAYBACK", 34, 52);
   cameraCtx.fillStyle = "#4fe0a1";
-  cameraCtx.fillText("m2-res_720p_terminal_red.mp4", 34, 82);
+  cameraCtx.fillText("press play when ready", 34, 82);
   cameraCtx.restore();
 }
 
@@ -399,19 +392,20 @@ function drawTrackSpace() {
   spaceCtx.fillStyle = "#0e1419";
   spaceCtx.fillRect(0, 0, w, h);
 
-  const origin = { x: w * 0.42, y: h * 0.76 };
-  drawGrid(origin, w, h);
+  const origin = { x: w * 0.14, y: h * 0.82 };
+  const bounds = trackSpaceBounds();
+  drawGrid(origin, w, h, bounds);
 
   for (const target of targets) {
     if (target.className === "bird") continue;
-    drawSpaceTrail(target, origin);
-    drawSpacePoint(target, origin);
+    drawSpaceTrail(target, origin, bounds);
+    drawSpacePoint(target, origin, bounds);
   }
 }
 
-function drawGrid(origin, w, h) {
-  const xAxis = { x: w * 0.34, y: -h * 0.16 };
-  const zAxis = { x: w * 0.34, y: h * 0.13 };
+function drawGrid(origin, w, h, bounds) {
+  const xAxis = { x: w * 0.32, y: -h * 0.12 };
+  const zAxis = { x: w * 0.48, y: -h * 0.26 };
   const yAxis = { x: 0, y: -h * 0.52 };
 
   spaceCtx.strokeStyle = "rgba(159, 176, 186, 0.22)";
@@ -430,17 +424,17 @@ function drawGrid(origin, w, h) {
 
   spaceCtx.fillStyle = "#9fb0ba";
   spaceCtx.font = `${Math.max(12, w / 42)}px ui-sans-serif, system-ui`;
-  spaceCtx.fillText("X lateral", origin.x + xAxis.x - 58, origin.y + xAxis.y - 8);
+  spaceCtx.fillText(`X +/-${Math.round(bounds.maxAbsX)}m`, origin.x + xAxis.x - 58, origin.y + xAxis.y - 8);
   spaceCtx.fillText("Y elevation", origin.x + yAxis.x + 8, origin.y + yAxis.y + 12);
-  spaceCtx.fillText("Z range", origin.x + zAxis.x - 4, origin.y + zAxis.y + 18);
+  spaceCtx.fillText(`Z ${Math.round(bounds.minZ)}-${Math.round(bounds.maxZ)}m`, origin.x + zAxis.x - 4, origin.y + zAxis.y - 8);
   spaceCtx.fillText("camera", origin.x - 22, origin.y + 24);
 }
 
-function drawSpaceTrail(target, origin) {
+function drawSpaceTrail(target, origin, bounds) {
   if (target.trail.length < 2) return;
   spaceCtx.beginPath();
   target.trail.forEach((point, index) => {
-    const p = projectSpace(point, origin);
+    const p = projectSpace(point, origin, bounds);
     if (index === 0) spaceCtx.moveTo(p.x, p.y);
     else spaceCtx.lineTo(p.x, p.y);
   });
@@ -449,21 +443,16 @@ function drawSpaceTrail(target, origin) {
   spaceCtx.stroke();
 }
 
-function drawSpacePoint(target, origin) {
-  const p = projectSpace(target, origin);
-  const future = projectSpace(
-    {
-      x: target.x + target.vx * 28,
-      y: target.y + target.vy * 28,
-      z: target.z + target.vz * 28,
-    },
-    origin,
-  );
+function drawSpacePoint(target, origin, bounds) {
+  const p = projectSpace(target, origin, bounds);
+  const previous = target.trail.length > 1 ? projectSpace(target.trail[target.trail.length - 2], origin, bounds) : null;
 
-  spaceCtx.strokeStyle = "rgba(79, 224, 161, 0.55)";
-  spaceCtx.setLineDash([5, 5]);
-  line(p.x, p.y, future.x, future.y);
-  spaceCtx.setLineDash([]);
+  if (previous) {
+    spaceCtx.strokeStyle = "rgba(79, 224, 161, 0.55)";
+    spaceCtx.setLineDash([5, 5]);
+    line(previous.x, previous.y, p.x, p.y);
+    spaceCtx.setLineDash([]);
+  }
 
   spaceCtx.fillStyle = "#4fe0a1";
   spaceCtx.beginPath();
@@ -475,10 +464,32 @@ function drawSpacePoint(target, origin) {
   spaceCtx.fillText(`T${pad(target.id)}${assigned ? ` -> ${assigned.name.split(" ").pop()}` : ""}`, p.x + 11, p.y - 6);
 }
 
-function projectSpace(point, origin) {
-  const sx = origin.x + point.x * 0.075 + point.z * 0.07;
-  const sy = origin.y - point.y * 0.24 + point.z * 0.026;
+function projectSpace(point, origin, bounds) {
+  const xNorm = clamp(point.x / bounds.maxAbsX, -1, 1);
+  const zNorm = clamp((point.z - bounds.minZ) / Math.max(1, bounds.maxZ - bounds.minZ), 0, 1);
+  const yNorm = clamp(point.y / bounds.maxAbsY, -1, 1);
+  const sx = origin.x + xNorm * bounds.xLen + zNorm * bounds.zLen;
+  const sy = origin.y - yNorm * bounds.yLen - zNorm * bounds.zRise;
   return { x: sx, y: sy };
+}
+
+function trackSpaceBounds() {
+  const points = targets.flatMap((target) => [target, ...target.trail]);
+  const zValues = points.map((point) => point.z).filter(Number.isFinite);
+  const xValues = points.map((point) => Math.abs(point.x)).filter(Number.isFinite);
+  const yValues = points.map((point) => Math.abs(point.y)).filter(Number.isFinite);
+  const minZ = Math.max(0, Math.min(...zValues, 40) - 10);
+  const maxZ = Math.max(...zValues, 160) + 10;
+  return {
+    minZ,
+    maxZ,
+    maxAbsX: Math.max(20, Math.max(...xValues, 20) * 1.25),
+    maxAbsY: Math.max(18, Math.max(...yValues, 18) * 1.35),
+    xLen: spaceCanvas.width * 0.28,
+    zLen: spaceCanvas.width * 0.5,
+    yLen: spaceCanvas.height * 0.44,
+    zRise: spaceCanvas.height * 0.28,
+  };
 }
 
 function renderAssets() {
