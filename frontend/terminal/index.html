@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DTI Optical Airspace Terminal</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="terminal-shell">
+    <header class="topbar">
+      <div>
+        <div class="brand">DTI</div>
+        <div class="subtitle">Passive optical airspace terminal</div>
+      </div>
+      <div class="top-metrics" aria-label="training and model status">
+        <div><span>model</span><strong>YOLO11x-P2</strong></div>
+        <div><span>checkpoint</span><strong>epoch 8+</strong></div>
+        <div><span>mAP50</span><strong>0.48</strong></div>
+        <div><span>mode</span><strong>live demo</strong></div>
+      </div>
+    </header>
+
+    <section class="camera-panel" aria-label="main camera feed">
+      <div class="panel-title">
+        <span>Ground camera feed</span>
+        <strong id="feedStatus">TRACKING</strong>
+      </div>
+      <canvas id="cameraCanvas" width="1280" height="720"></canvas>
+      <div class="feed-footer">
+        <div>
+          <span>camera</span>
+          <strong>North Ridge Optical Node</strong>
+        </div>
+        <div>
+          <span>hfov</span>
+          <strong>62 deg</strong>
+        </div>
+        <div>
+          <span>frame</span>
+          <strong id="frameCounter">000000</strong>
+        </div>
+      </div>
+    </section>
+
+    <aside class="right-rail" aria-label="track space and assets">
+      <section class="track-space-panel">
+        <div class="panel-title">
+          <span>Optical XYZ track space</span>
+          <strong id="trackCount">0 tracks</strong>
+        </div>
+        <canvas id="spaceCanvas" width="520" height="330"></canvas>
+      </section>
+
+      <section class="assets-panel">
+        <div class="panel-title">
+          <span>Available response assets</span>
+          <strong>assignment queue</strong>
+        </div>
+        <div id="assetList" class="asset-list"></div>
+      </section>
+    </aside>
+
+    <section class="bottom-panel" aria-label="track table and event log">
+      <div class="track-table">
+        <div class="table-head">
+          <span>id</span>
+          <span>class</span>
+          <span>confidence</span>
+          <span>range</span>
+          <span>bearing</span>
+          <span>priority</span>
+        </div>
+        <div id="trackRows"></div>
+      </div>
+      <div class="event-log">
+        <div class="panel-title">
+          <span>operator log</span>
+          <strong>rolling</strong>
+        </div>
+        <div id="eventLog"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

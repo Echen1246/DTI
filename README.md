@@ -138,3 +138,20 @@ PYTHONPATH=src python -m dti_demo.platform \
 ```
 
 The map panel is a visualization layer: it projects each track from camera pose, horizontal bearing, and class-size geometric range priors. It is meant for demo/operator context, not precise navigation.
+
+## Tabletop Terminal Frontend
+
+For judge walkthroughs, open the static terminal UI directly:
+
+```bash
+open frontend/terminal/index.html
+```
+
+The terminal shows the intended table layout:
+
+- Main camera feed with long-range airborne tracks and bounding boxes.
+- Camera-relative XYZ track space with blips and projected motion trails.
+- Response asset readiness with simple track-to-asset assignments.
+- Track table and operator event log.
+
+It currently runs from an in-browser simulated scene so the table demo works without field hardware. The center feed can later be swapped to a real annotated MP4 or live inference stream while preserving the same right-side track-space and asset panels.
